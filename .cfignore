@@ -1,0 +1,15 @@
+# Created by .ignore support plugin (hsz.mobi)
+### Example user template template
+### Example user template
+
+# external packages folder
+vendor/
+
+# IntelliJ project files
+.idea
+*.iml
+out
+gen
+
+# Visual Studio Code
+.vscode

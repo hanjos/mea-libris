@@ -1,0 +1,81 @@
+hash: 28a075e01a2722770fce05f6bb48f7063c37a569ee950be692bb49fbdb54e6f2
+updated: 2016-11-24T17:43:53.2229473-02:00
+imports:
+- name: cloud.google.com/go
+  version: 5af4269f950e91e917bab77f1138139023c868c2
+  subpackages:
+  - compute/metadata
+  - internal
+  - internal/bundler
+  - logging
+  - logging/apiv2
+  - logging/internal
+- name: github.com/golang/gddo
+  version: 806603679dee755c926f72ac76673ee4594dcd32
+  subpackages:
+  - httputil
+  - httputil/header
+- name: github.com/golang/protobuf
+  version: 4bd1920723d7b7c925de087aa32e2187708897f7
+  subpackages:
+  - proto
+  - ptypes
+  - ptypes/any
+  - ptypes/duration
+  - ptypes/empty
+  - ptypes/struct
+  - ptypes/timestamp
+  - ptypes/wrappers
+- name: github.com/gorilla/context
+  version: 08b5f424b9271eedf6f9f0ce86cb9396ed337a42
+- name: github.com/gorilla/securecookie
+  version: fa5329f913702981df43dcb2a380bac429c810b5
+- name: github.com/gorilla/sessions
+  version: ca9ada44574153444b00d3fd9c8559e4cc95f896
+- name: golang.org/x/net
+  version: 0e2717dc3cc05907dc23096ef3a9086ea93f567f
+  subpackages:
+  - context
+  - context/ctxhttp
+  - http2
+  - http2/hpack
+  - idna
+  - internal/timeseries
+  - lex/httplex
+  - trace
+- name: golang.org/x/oauth2
+  version: 1e695b1c8febf17aad3bfa7bf0a819ef94b98ad5
+  subpackages:
+  - google
+  - internal
+  - jws
+  - jwt
+- name: google.golang.org/api
+  version: 3cf64a039723963488f603d140d0aec154fdcd20
+  subpackages:
+  - books/v1
+  - gensupport
+  - googleapi
+  - googleapi/internal/uritemplates
+- name: google.golang.org/appengine
+  version: c7b8227c83007befd67b324a64c969ebc1d7475d
+  subpackages:
+  - aetest
+  - datastore
+  - internal
+  - internal/app_identity
+  - internal/base
+  - internal/datastore
+  - internal/log
+  - internal/memcache
+  - internal/modules
+  - internal/remote_api
+  - internal/search
+  - internal/urlfetch
+  - internal/user
+  - log
+  - memcache
+  - search
+  - urlfetch
+  - user
+testImports: []

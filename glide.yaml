@@ -1,0 +1,13 @@
+# Run install with -v to merge inner /vendor dirs
+package: github.com/hanjos/mea-libris
+import:
+- package: github.com/golang/gddo
+  subpackages:
+  - httputil
+- package: github.com/gorilla/sessions
+- package: golang.org/x/oauth2
+  subpackages:
+  - google
+- package: google.golang.org/api
+  subpackages:
+  - books/v1
