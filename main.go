@@ -364,7 +364,7 @@ func errSessionError(s *sessions.Session, err error) error {
 	return fmt.Errorf("Error on session %v : %v", s, err)
 }
 
-var errCodeNotFound error = fmt.Errorf("Code not found!")
+var errCodeNotFound = fmt.Errorf("Code not found!")
 
 func errTokenExchangeError(err error) error {
 	return fmt.Errorf("Error on token exchange: %v", err)

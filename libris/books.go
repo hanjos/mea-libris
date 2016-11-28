@@ -7,6 +7,7 @@ import (
 	"strings"
 )
 
+// Book represents information about a volume.
 type Book struct {
 	Title          string   `json:"title,omitempty"`
 	Authors        []string `json:"authors,omitempty"`
@@ -17,6 +18,7 @@ type Book struct {
 	Publisher     string  `json:"publisher,omitempty"`
 }
 
+// marshalCSVRow returns the data in b as a CSV row.
 func (b *Book) marshalCSVRow() []string {
 	return []string{
 		fmt.Sprintf("%v", b.Title),
@@ -28,8 +30,10 @@ func (b *Book) marshalCSVRow() []string {
 	}
 }
 
+// Books is an alias for a slice of *Book, for methods to hang onto.
 type Books []*Book
 
+// marshalCSV returns the data in bs as a slice of CSV rows preceded by a header row.
 func (bs Books) marshalCSV() [][]string {
 	result := [][]string{}
 
@@ -42,15 +46,17 @@ func (bs Books) marshalCSV() [][]string {
 	return result
 }
 
+// EncodeCSV writes the given books to the given io.Writer. Returns all errors found bundled in a single error, or nil
+// if everything went ok.
 func (bs Books) EncodeCSV(writer io.Writer) error {
 	w := csv.NewWriter(writer)
 	records := bs.marshalCSV()
 
-	errors := &Notification{}
+	n := &notification{}
 
 	for _, record := range records {
 		if err := w.Write(record); err != nil {
-			errors.Report(err)
+			n.Report(err)
 		}
 	}
 
@@ -58,8 +64,8 @@ func (bs Books) EncodeCSV(writer io.Writer) error {
 	w.Flush()
 
 	if err := w.Error(); err != nil {
-		errors.Report(err)
+		n.Report(err)
 	}
 
-	return errors.ToError()
+	return n.ToError()
 }
