@@ -7,7 +7,7 @@ Shows your Google Books list as JSON or CSV.
 ## How do I build/run this?
 This command needs OAuth credentials to access your book data, which can be created at [Google API Console](https://console.developers.google.com/). The whole process for server-side web apps is explained [here](https://developers.google.com/identity/protocols/OAuth2WebServer). 
 
-In particular, you'll need to register an authorized redirect URL, which will receive Google's auth responses. This program offers the `/oauth2callback` endpoint for that, so add the full URL: `https://<my-running-server>/oauth2callback`.
+In particular, you'll need to register an authorized redirect URL, which will receive Google's auth responses. This program offers the `/google/oauth2callback` endpoint for that, so add the full URL: `https://<my-running-server>/google/oauth2callback`.
  
 This command reads four environment variables: `CLIENT_ID`, `CLIENT_SECRET`, `REDIRECT_URL` and `PORT`. `PORT` is merely the port the server will be bound to; `CLIENT_ID` and `CLIENT_SECRET` are your application's Google OAuth credentials; and `REDIRECT_URL` is the authorized redirect URL you registered at the API Console.
 

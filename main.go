@@ -53,15 +53,12 @@ func _google(w http.ResponseWriter, r *http.Request) *appError {
 		//return errSessionNotFound(session, err)
 	}
 
-	code, ok := getFlash(session, "code")
-	session.Save(r, w)
+	token, ok := session.Values["accessToken"].(string)
 	if !ok {
-		err := connect(w, r)
-
-		return errWrap(err, _status(http.StatusUnauthorized))
+		return errWrap(errAccessTokenNotFound, _status(http.StatusUnauthorized))
 	}
 
-	svc, err := newGoogleBooksClient(code)
+	svc, err := newBooksClient(context.Background(), token)
 	if err != nil {
 		return errWrap(err, _status(http.StatusInternalServerError))
 	}
@@ -79,35 +76,42 @@ func _google(w http.ResponseWriter, r *http.Request) *appError {
 	return nil
 }
 
-func connect(w http.ResponseWriter, r *http.Request) error {
-	log.Println("Beginning auth exchange")
+func _googleConnect(w http.ResponseWriter, r *http.Request) *appError {
+	log.Println("Handling /google/connect")
 
 	session, err := store.Get(r, sessionName)
 	if err != nil {
 		//return errSessionError(session, err)
 	}
 
+	_, ok := session.Values["accessToken"].(string)
+	if ok {
+		log.Println("User authenticated and authorized.")
+		fmt.Fprintln(w, "Connected!") // XXX w.WriteHeader(http.StatusOK) is implicit
+		return nil
+	}
+
+	log.Println("User not authorized; beginning auth exchange")
+	log.Println("Generating a new state")
 	state := randomString()
 
-	session.AddFlash(state, "state")
+	session.Values["state"] = state
 	session.Save(r, w)
 
 	url := config.AuthCodeURL(state)
 
+	log.Println("Redirecting to Google's OAuth servers for a code")
 	http.Redirect(w, r, url, http.StatusTemporaryRedirect)
 	return nil
 }
 
-func newGoogleBooksClient(code string) (*books.Service, error) {
-	log.Println("Exchanging the code for an access token")
+func newBooksClient(ctx context.Context, token string) (*books.Service, error) {
+	log.Println("Using the access token to build a Google Books client")
 
-	ctx := context.Background()
-	token, err := config.Exchange(ctx, code)
-	if err != nil {
-		return nil, errTokenExchangeError(err)
-	}
+	tok := new(oauth2.Token)
+	tok.AccessToken = token
 
-	client := config.Client(ctx, token)
+	client := config.Client(ctx, tok)
 	svc, err := books.New(client)
 	if err != nil {
 		return nil, errCantLoadBooksClient(err)
@@ -247,30 +251,40 @@ func encodeBooksAsCSV(books []*libris.Book, w io.Writer) error {
 	return nil
 }
 
-func _oauthCallback(w http.ResponseWriter, r *http.Request) *appError {
-	log.Println("Handling /oauth2callback; validating state")
+func _googleOAuthCallback(w http.ResponseWriter, r *http.Request) *appError {
+	log.Println("Handling /google/oauth2callback")
+	log.Println("Validating state")
 
 	session, err := store.Get(r, sessionName)
 	if err != nil {
 		//return errSessionError(session, err)
 	}
 
-	sessionState, ok := getFlash(session, "state")
-	session.Save(r, w)
+	sessionState, ok := session.Values["state"].(string)
 	if !ok || r.FormValue("state") != sessionState {
 		return errWrap(errInvalidState(sessionState, r.FormValue("state")), _status(http.StatusBadRequest))
 	}
 
-	log.Println("Saving the code to the session")
+	log.Println("Extracting the code")
 	code := r.FormValue("code")
 	if code == "" {
 		return errWrap(errCodeNotFound, _status(http.StatusBadRequest))
 	}
 
-	session.AddFlash(code, "code")
+	defer func() {
+		session.Values["state"] = nil // XXX state is a one-time value; we don't need it anymore
+	}()
+
+	log.Println("Exchanging the code for an access token")
+	token, err := config.Exchange(context.Background(), code)
+	if err != nil {
+		return errWrap(errTokenExchangeError(err), _status(http.StatusBadRequest))
+	}
+
+	session.Values["accessToken"] = token.AccessToken // XXX can't store a *oauth2.Token, so store a string
 	session.Save(r, w)
 
-	http.Redirect(w, r, "/google", http.StatusTemporaryRedirect)
+	http.Redirect(w, r, "/google/connect", http.StatusTemporaryRedirect)
 	return nil
 }
 
@@ -278,7 +292,8 @@ func _oauthCallback(w http.ResponseWriter, r *http.Request) *appError {
 func main() {
 	http.Handle("/", appHandler(_index))
 	http.Handle("/google", appHandler(_google))
-	http.Handle("/oauth2callback", appHandler(_oauthCallback))
+	http.Handle("/google/connect", appHandler(_googleConnect))
+	http.Handle("/google/oauth2callback", appHandler(_googleOAuthCallback))
 
 	log.Printf("Starting server on port %s\n", port)
 	http.ListenAndServe(":"+port, nil)
@@ -290,26 +305,11 @@ type authSession struct {
 	Code  string
 }
 
-func getFlash(s *sessions.Session, field string) (value string, found bool) {
-	flashes := s.Flashes(field)
-
-	if len(flashes) < 1 {
-		return "", false
-	}
-
-	if len(flashes) > 1 {
-		log.Printf("Lots of codes available (%d); using the first\n", len(flashes))
-	}
-
-	return flashes[0].(string), true
-}
-
 // appHandler
 type appHandler func(http.ResponseWriter, *http.Request) *appError
 
 func (fn appHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if err := fn(w, r); err != nil {
-		// e is *appError, not os.Error.
 		log.Println(err)
 		http.Error(w, err.Message, err.Status)
 	}
@@ -327,7 +327,7 @@ type appError struct {
 }
 
 func (err appError) Error() string {
-	return fmt.Sprintf("Error(%d): %s", err.Status, err.Message)
+	return fmt.Sprintf("Error [%d]: %s", err.Status, err.Message)
 }
 
 type appErrorField func(appErr *appError)
@@ -382,24 +382,26 @@ func errSessionError(s *sessions.Session, err error) error {
 	return fmt.Errorf("Error on session %v : %v", s, err)
 }
 
+var errAccessTokenNotFound = fmt.Errorf("User not authorized! Use the /google/connect endpoint.")
+
 var errCodeNotFound = fmt.Errorf("Code not found!")
 
 func errTokenExchangeError(err error) error {
-	return fmt.Errorf("Error on token exchange: %v", err)
+	return fmt.Errorf("Problem with token exchange: %v", err)
 }
 
 func errCantLoadBooksClient(err error) error {
-	return fmt.Errorf("Error while loading Google Books client: %v", err)
+	return fmt.Errorf("Couldn't load Google Books client: %v", err)
 }
 
 func errCantLoadVolumes(err error) error {
-	return fmt.Errorf("Error while loading the user's volumes: %v", err)
+	return fmt.Errorf("Couldn't load the user's volumes: %v", err)
 }
 
 func errCantMarshalBooksToJSON(err error) error {
-	return fmt.Errorf("Error while marshalling book info to JSON: %v", err)
+	return fmt.Errorf("Couldn't marshal the books' info to JSON: %v", err)
 }
 
 func errCantWriteResponse(err error) error {
-	return fmt.Errorf("Error while writing response: %v", err)
+	return fmt.Errorf("Couldn't write response: %v", err)
 }
