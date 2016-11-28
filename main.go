@@ -6,7 +6,7 @@ import (
 	"io"
 	"log"
 	"net/http"
-  "os"
+	"os"
 	"time"
 
 	"github.com/golang/gddo/httputil"
@@ -15,18 +15,18 @@ import (
 	"golang.org/x/net/context"
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/google"
-  "google.golang.org/api/books/v1"
+	"google.golang.org/api/books/v1"
 )
 
 var (
-  sessionName  = "sessionName"
+	sessionName = "sessionName"
 
 	clientID     = os.Getenv("CLIENT_ID")
 	clientSecret = os.Getenv("CLIENT_SECRET")
 	redirectURL  = os.Getenv("REDIRECT_URL")
-  port         = os.Getenv("PORT")
+	port         = os.Getenv("PORT")
 
-  config = &oauth2.Config{
+	config = &oauth2.Config{
 		ClientID:     clientID,
 		ClientSecret: clientSecret,
 		Endpoint:     google.Endpoint,
@@ -37,13 +37,13 @@ var (
 	store = sessions.NewCookieStore([]byte(randomString()))
 )
 
-func Index(w http.ResponseWriter, r *http.Request) *appError {
-	fmt.Fprintf(w, "Hello, World!\nRequest: %v", r)
+func _index(w http.ResponseWriter, r *http.Request) *appError {
+	log.Println("Handling /")
 
 	return nil
 }
 
-func Google(w http.ResponseWriter, r *http.Request) *appError {
+func _google(w http.ResponseWriter, r *http.Request) *appError {
 	log.Println("Handling /google")
 
 	session, err := store.Get(r, sessionName)
@@ -144,7 +144,7 @@ func getBooks(svc *books.Service) ([]*libris.Book, error) {
 		}
 	}
 
-  log.Printf("%d books processed (of a total of %d)\n", len(myBooks), totalItems)
+	log.Printf("%d books processed (of a total of %d)\n", len(myBooks), totalItems)
 	return myBooks, nil
 }
 
@@ -175,10 +175,10 @@ func encodeBooks(books []*libris.Book, w io.Writer, r *http.Request) error {
 	log.Printf("Requested response format: %s\n", r.Header.Get("Accept"))
 
 	contentType := httputil.NegotiateContentType(r,
-    []string{"application/json", "text/csv", "application/csv"},
-    "application/json")
+		[]string{"application/json", "text/csv", "application/csv"},
+		"application/json")
 
-  log.Printf("Negotiated content type: %s\n", contentType)
+	log.Printf("Negotiated content type: %s\n", contentType)
 	switch contentType {
 	case "application/json":
 		return encodeBooksAsJSON(books, w)
@@ -187,7 +187,7 @@ func encodeBooks(books []*libris.Book, w io.Writer, r *http.Request) error {
 	case "text/csv":
 		return encodeBooksAsCSV(books, w)
 	default:
-    log.Printf("Unexpected content type %s; rendering as application/json", contentType)
+		log.Printf("Unexpected content type %s; rendering as application/json", contentType)
 		return encodeBooksAsJSON(books, w)
 	}
 }
@@ -229,8 +229,8 @@ func encodeBooksAsCSV(books []*libris.Book, w io.Writer) error {
 	return nil
 }
 
-func OAuthCallback(w http.ResponseWriter, r *http.Request) *appError {
-	log.Println("OAuth callback posted; validating state")
+func _oauthCallback(w http.ResponseWriter, r *http.Request) *appError {
+	log.Println("Handling /oauth2callback; validating state")
 
 	session, err := store.Get(r, sessionName)
 	if err != nil {
@@ -258,12 +258,12 @@ func OAuthCallback(w http.ResponseWriter, r *http.Request) *appError {
 
 // MAIN
 func main() {
-	http.Handle("/", appHandler(Index))
-	http.Handle("/google", appHandler(Google))
-	http.Handle("/oauth2callback", appHandler(OAuthCallback))
+	http.Handle("/", appHandler(_index))
+	http.Handle("/google", appHandler(_google))
+	http.Handle("/oauth2callback", appHandler(_oauthCallback))
 
 	log.Printf("Starting server on port %s\n", port)
-  http.ListenAndServe(":"+port, nil)
+	http.ListenAndServe(":"+port, nil)
 }
 
 // session
