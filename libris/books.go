@@ -16,6 +16,7 @@ type Book struct {
 	//MyRating int64	 `json:"myRating,omitempty"`
 	AverageRating float64 `json:"averageRating,omitempty"`
 	Publisher     string  `json:"publisher,omitempty"`
+	FileType      string  `json:"fileType,omitempty"`
 }
 
 // marshalCSVRow returns the data in b as a CSV row.

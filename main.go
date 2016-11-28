@@ -16,6 +16,7 @@ import (
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/google"
 	"google.golang.org/api/books/v1"
+	"strings"
 )
 
 var (
@@ -131,10 +132,7 @@ func getBooks(svc *books.Service) ([]*libris.Book, error) {
 		}
 
 		for _, v := range volumes.Items {
-			info := v.VolumeInfo
-
-			//log.Printf(">>> %s from %v\n", info.Title, info.Authors)
-			myBooks = append(myBooks, newBook(info))
+			myBooks = append(myBooks, newBook(v))
 		}
 
 		nextIndex, totalItems = nextIndex+int64(len(volumes.Items)), volumes.TotalItems
@@ -148,7 +146,10 @@ func getBooks(svc *books.Service) ([]*libris.Book, error) {
 	return myBooks, nil
 }
 
-func newBook(info *books.VolumeVolumeInfo) *libris.Book {
+func newBook(v *books.Volume) *libris.Book {
+	info := v.VolumeInfo
+
+	// resolving the identification
 	var id, idType string
 
 	for _, identifier := range info.IndustryIdentifiers {
@@ -161,13 +162,30 @@ func newBook(info *books.VolumeVolumeInfo) *libris.Book {
 		break
 	}
 
+	// getting the file type
+	fileType := "UNKNOWN"
+	if v.AccessInfo.Pdf != nil {
+		fileType = "PDF"
+	} else if v.AccessInfo.Epub != nil {
+		fileType = "EPUB"
+	}
+
+	// removing the extension from the title if it's there
+	title := info.Title
+	if strings.HasSuffix(strings.ToLower(title), ".pdf") && fileType == "PDF" {
+		title = title[:len(title)-4]
+	} else if strings.HasSuffix(strings.ToLower(title), ".epub") && fileType == "EPUB" {
+		title = title[:len(title)-5]
+	}
+
 	return &libris.Book{
-		Title:          info.Title,
+		Title:          title,
 		Authors:        info.Authors,
 		Identifier:     id,
 		IdentifierType: idType,
 		AverageRating:  info.AverageRating,
 		Publisher:      info.Publisher,
+		FileType:       fileType,
 	}
 }
 
