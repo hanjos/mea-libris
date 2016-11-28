@@ -1,5 +1,5 @@
 [![GoDoc](https://godoc.org/github.com/hanjos/mea-libris?status.svg)](https://godoc.org/github.com/hanjos/mea-libris)
-[![GoReportCard](https://goreportcard.com/badge/github.com/hanjos/mea-libris)](https://goreportcard.com/badge/github.com/hanjos/mea-libris)
+[![GoReportCard](https://goreportcard.com/badge/github.com/hanjos/mea-libris)](https://goreportcard.com/report/github.com/hanjos/mea-libris)
 
 Shows your Google Books list as JSON or CSV.
 
