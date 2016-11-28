@@ -4,14 +4,16 @@
 Shows your Google Books list as JSON or CSV.
 
 # FAQ
-## How do I run this?
-This program needs OAuth credentials to access your book data, which can be created at [Google API Console](https://console.developers.google.com/). The whole process for server-side web apps is explained [here](https://developers.google.com/identity/protocols/OAuth2WebServer). 
+## How do I build/run this?
+This command needs OAuth credentials to access your book data, which can be created at [Google API Console](https://console.developers.google.com/). The whole process for server-side web apps is explained [here](https://developers.google.com/identity/protocols/OAuth2WebServer). 
 
-In particular, you'll need an authorized redirect URL which will receive Google's auth responses. This program offers the `/oauth2callback` endpoint for that, so add the full URL: `https://<my-running-server>/oauth2callback`.
+In particular, you'll need to register an authorized redirect URL, which will receive Google's auth responses. This program offers the `/oauth2callback` endpoint for that, so add the full URL: `https://<my-running-server>/oauth2callback`.
  
-The application reads four environment variables: `CLIENT_ID`, `CLIENT_SECRET`, `REDIRECT_URL` and `PORT`. `PORT` is merely the port this application will listen to; `CLIENT_ID` and `CLIENT_SECRET` are your application's Google OAuth credentials; and `REDIRECT_URL` is the redirect URL you registered at the API Console.
+This command reads four environment variables: `CLIENT_ID`, `CLIENT_SECRET`, `REDIRECT_URL` and `PORT`. `PORT` is merely the port the server will be bound to; `CLIENT_ID` and `CLIENT_SECRET` are your application's Google OAuth credentials; and `REDIRECT_URL` is the authorized redirect URL you registered at the API Console.
 
-After all that setup, just compile and run: It uses [Go](https://golang.org/) (version 1.6+) and [Glide](http://glide.sh/) for dependency management:
+mea-libris uses [Go](https://golang.org/) (version 1.6+) and [Glide](http://glide.sh/), so you'll need to install them as well.
+
+After the setup, compile and run:
 
 ```
 $ glide install -v
@@ -19,7 +21,15 @@ $ go install
 $ $GOPATH/bin/mea-libris
 ```
 
-### But I don't like Glide; I prefer Godep/GB/gpm/<[take your pick](https://github.com/golang/go/wiki/PackageManagementTools)>!
+Alternatively, you could just deploy it in the cloud, without building it at all (if your cloud provider supports Go and Glide):
+
+```
+$ cf push mea-libris -b go_buildpack
+```
+
+I've used Cloud Foundry here, but pick your favorite :)
+
+### But I don't like Glide; I prefer <[take your pick](https://github.com/golang/go/wiki/PackageManagementTools)>!
 I've found Glide to be nice, but I have no strong opinion or experience either way. The main requirement was something supported by Cloud Foundry (which I'm also checking out), so Glide worked well enough.
 
 ## Google Books
