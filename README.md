@@ -19,7 +19,7 @@ $ go install
 $ $GOPATH/bin/mea-libris
 ```
 
-## But I don't like Glide; I prefer Godep/GB/gpm/<[take your pick](https://github.com/golang/go/wiki/PackageManagementTools)>!
+### But I don't like Glide; I prefer Godep/GB/gpm/<[take your pick](https://github.com/golang/go/wiki/PackageManagementTools)>!
 I've found Glide to be nice, but I have no strong opinion or experience either way. The main requirement was something supported by Cloud Foundry (which I'm also checking out), so Glide worked well enough.
 
 ## Google Books
