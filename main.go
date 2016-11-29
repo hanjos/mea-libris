@@ -47,8 +47,8 @@ var (
 func _google(w http.ResponseWriter, r *http.Request) *appError {
 	session, err := store.Get(r, sessionName)
 	if err != nil {
-		// ignore session errors
-		//return errSessionNotFound(session, err)
+		// TODO ignoring session errors
+		//return errWrap(errSessionError(sessionName, err), _status(http.StatusInternalServerError))
 	}
 
 	token, ok := session.Values["accessToken"].(string)
@@ -77,7 +77,8 @@ func _google(w http.ResponseWriter, r *http.Request) *appError {
 func _googleConnect(w http.ResponseWriter, r *http.Request) *appError {
 	session, err := store.Get(r, sessionName)
 	if err != nil {
-		//return errSessionError(session, err)
+		// TODO ignoring session errors
+		//return errWrap(errSessionError(sessionName, err), _status(http.StatusInternalServerError))
 	}
 
 	_, ok := session.Values["accessToken"].(string)
@@ -104,7 +105,8 @@ func _googleConnect(w http.ResponseWriter, r *http.Request) *appError {
 func _googleDisconnect(w http.ResponseWriter, r *http.Request) *appError {
 	session, err := store.Get(r, sessionName)
 	if err != nil {
-		//return errSessionError(session, err)
+		// TODO ignoring session errors
+		//return errWrap(errSessionError(sessionName, err), _status(http.StatusInternalServerError))
 	}
 
 	token, ok := session.Values["accessToken"].(string)
@@ -137,7 +139,8 @@ func _googleOAuthCallback(w http.ResponseWriter, r *http.Request) *appError {
 
 	session, err := store.Get(r, sessionName)
 	if err != nil {
-		//return errSessionError(session, err)
+		// TODO ignoring session errors
+		//return errWrap(errSessionError(sessionName, err), _status(http.StatusInternalServerError))
 	}
 
 	sessionState, ok := session.Values["state"].(string)
@@ -384,10 +387,6 @@ func errWrap(err error, fields ...appErrorField) *appError {
 
 func errInvalidState(expected, actual string) error {
 	return fmt.Errorf("Invalid state parameter: expected %s; got %s", expected, actual)
-}
-
-func errSessionError(s *sessions.Session, err error) error {
-	return fmt.Errorf("Error on session %v : %v", s, err)
 }
 
 var errAccessTokenNotFound = errors.New("User not authorized. Use the /google/connect endpoint.")
