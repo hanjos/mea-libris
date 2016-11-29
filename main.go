@@ -105,6 +105,39 @@ func _googleConnect(w http.ResponseWriter, r *http.Request) *appError {
 	return nil
 }
 
+func _googleDisconnect(w http.ResponseWriter, r *http.Request) *appError {
+	log.Println("Handling /google/disconnect")
+
+	session, err := store.Get(r, sessionName)
+	if err != nil {
+		//return errSessionError(session, err)
+	}
+
+	token, ok := session.Values["accessToken"].(string)
+	if !ok {
+		log.Println("User wasn't connected. Nothing was done.")
+		fmt.Fprintln(w, "User wasn't connected. Nothing was done.")
+		return nil
+	}
+
+	log.Println("Disconnecting the current user")
+	url := "https://accounts.google.com/o/oauth2/revoke?token=" + token
+	resp, err := http.Get(url)
+	defer resp.Body.Close()
+	if err != nil {
+		return errWrap(errCantRevokeToken(err), _status(http.StatusInternalServerError))
+	}
+
+	// Reset the user's session
+	log.Println("Resetting the session")
+	session.Values["state"] = nil
+	session.Values["accessToken"] = nil
+	session.Save(r, w)
+
+	fmt.Fprintln(w, "User disconnected!")
+	return nil
+}
+
 func newBooksClient(ctx context.Context, token string) (*books.Service, error) {
 	log.Println("Using the access token to build a Google Books client")
 
@@ -293,6 +326,7 @@ func main() {
 	http.Handle("/", appHandler(_index))
 	http.Handle("/google", appHandler(_google))
 	http.Handle("/google/connect", appHandler(_googleConnect))
+	http.Handle("/google/disconnect", appHandler(_googleDisconnect))
 	http.Handle("/google/oauth2callback", appHandler(_googleOAuthCallback))
 
 	log.Printf("Starting server on port %s\n", port)
@@ -305,9 +339,10 @@ type authSession struct {
 	Code  string
 }
 
-// appHandler
+// MIDDLEWARES
 type appHandler func(http.ResponseWriter, *http.Request) *appError
 
+// ServeHTTP implements the http.Handler interface.
 func (fn appHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if err := fn(w, r); err != nil {
 		log.Println(err)
@@ -320,12 +355,13 @@ func randomString() string {
 	return fmt.Sprintf("st%d", time.Now().UnixNano())
 }
 
-// appError
+// APPLICATION ERRORS
 type appError struct {
 	Message string
 	Status  int
 }
 
+// Error implements the error interface.
 func (err appError) Error() string {
 	return fmt.Sprintf("Error [%d]: %s", err.Status, err.Message)
 }
@@ -404,4 +440,8 @@ func errCantMarshalBooksToJSON(err error) error {
 
 func errCantWriteResponse(err error) error {
 	return fmt.Errorf("Couldn't write response: %v", err)
+}
+
+func errCantRevokeToken(err error) error {
+	return fmt.Errorf("Failed to revoke token for the current user: %v", err)
 }
