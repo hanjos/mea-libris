@@ -2,11 +2,13 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log"
 	"net/http"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/golang/gddo/httputil"
@@ -16,7 +18,6 @@ import (
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/google"
 	"google.golang.org/api/books/v1"
-	"strings"
 )
 
 var (
@@ -37,14 +38,12 @@ var (
 
 	store = sessions.NewCookieStore([]byte(randomString()))
 
-	logger = log.New(os.Stdout, "[mea-libris] ", log.LstdFlags)
+	// No date or time; an external router can consume this log and provide that
+	logOut = log.New(os.Stdout, "[mea-libris] ", 0)
+	logErr = log.New(os.Stderr, "[mea-libris] ", 0)
 )
 
 // ROUTES
-func _index(w http.ResponseWriter, r *http.Request) *appError {
-	return nil
-}
-
 func _google(w http.ResponseWriter, r *http.Request) *appError {
 	session, err := store.Get(r, sessionName)
 	if err != nil {
@@ -83,13 +82,13 @@ func _googleConnect(w http.ResponseWriter, r *http.Request) *appError {
 
 	_, ok := session.Values["accessToken"].(string)
 	if ok {
-		logger.Println("User authenticated and authorized.")
+		logOut.Println("User authenticated and authorized.")
 		fmt.Fprintln(w, "Connected!") // XXX w.WriteHeader(http.StatusOK) is implicit
 		return nil
 	}
 
-	logger.Println("User not authorized; beginning auth exchange")
-	logger.Println("Generating a new state")
+	logOut.Println("User not authorized; beginning auth exchange")
+	logOut.Println("Generating a new state")
 	state := randomString()
 
 	session.Values["state"] = state
@@ -97,7 +96,7 @@ func _googleConnect(w http.ResponseWriter, r *http.Request) *appError {
 
 	url := config.AuthCodeURL(state)
 
-	logger.Println("Redirecting to Google's OAuth servers for a code")
+	logOut.Println("Redirecting to Google's OAuth servers for a code")
 	http.Redirect(w, r, url, http.StatusTemporaryRedirect)
 	return nil
 }
@@ -110,12 +109,12 @@ func _googleDisconnect(w http.ResponseWriter, r *http.Request) *appError {
 
 	token, ok := session.Values["accessToken"].(string)
 	if !ok {
-		logger.Println("User wasn't connected. Nothing was done.")
+		logOut.Println("User wasn't connected. Nothing was done.")
 		fmt.Fprintln(w, "User wasn't connected. Nothing was done.")
 		return nil
 	}
 
-	logger.Println("Disconnecting the current user")
+	logOut.Println("Disconnecting the current user")
 	url := "https://accounts.google.com/o/oauth2/revoke?token=" + token
 	resp, err := http.Get(url)
 	defer resp.Body.Close()
@@ -124,7 +123,7 @@ func _googleDisconnect(w http.ResponseWriter, r *http.Request) *appError {
 	}
 
 	// Reset the user's session
-	logger.Println("Resetting the session")
+	logOut.Println("Resetting the session")
 	session.Values["state"] = nil
 	session.Values["accessToken"] = nil
 	session.Save(r, w)
@@ -134,7 +133,7 @@ func _googleDisconnect(w http.ResponseWriter, r *http.Request) *appError {
 }
 
 func _googleOAuthCallback(w http.ResponseWriter, r *http.Request) *appError {
-	logger.Println("Validating the state")
+	logOut.Println("Validating the state")
 
 	session, err := store.Get(r, sessionName)
 	if err != nil {
@@ -146,7 +145,7 @@ func _googleOAuthCallback(w http.ResponseWriter, r *http.Request) *appError {
 		return errWrap(errInvalidState(sessionState, r.FormValue("state")), _status(http.StatusBadRequest))
 	}
 
-	logger.Println("Reading the code")
+	logOut.Println("Reading the code")
 	code := r.FormValue("code")
 	if code == "" {
 		return errWrap(errCodeNotFound, _status(http.StatusBadRequest))
@@ -156,7 +155,7 @@ func _googleOAuthCallback(w http.ResponseWriter, r *http.Request) *appError {
 		session.Values["state"] = nil // XXX state is a one-time value; we don't need it anymore
 	}()
 
-	logger.Println("Exchanging the code for an access token")
+	logOut.Println("Exchanging the code for an access token")
 	token, err := config.Exchange(context.Background(), code)
 	if err != nil {
 		return errWrap(errTokenExchangeError(err), _status(http.StatusBadRequest))
@@ -165,14 +164,14 @@ func _googleOAuthCallback(w http.ResponseWriter, r *http.Request) *appError {
 	session.Values["accessToken"] = token.AccessToken // XXX can't store a *oauth2.Token, so store a string
 	session.Save(r, w)
 
-	logger.Println("Redirecting to /google/connect to finish the auth process")
+	logOut.Println("Redirecting to /google/connect to finish the auth process")
 	http.Redirect(w, r, "/google/connect", http.StatusTemporaryRedirect)
 	return nil
 }
 
 // STEP FUNCTIONS
 func newBooksClient(ctx context.Context, token string) (*books.Service, error) {
-	logger.Println("Using the access token to build a Google Books client")
+	logOut.Println("Using the access token to build a Google Books client")
 
 	tok := new(oauth2.Token)
 	tok.AccessToken = token
@@ -187,7 +186,7 @@ func newBooksClient(ctx context.Context, token string) (*books.Service, error) {
 }
 
 func getBooks(svc *books.Service) ([]*libris.Book, error) {
-	logger.Print("Getting the user's books")
+	logOut.Print("Getting the user's books")
 
 	myBooks := []*libris.Book{}
 	nextIndex, totalItems := int64(0), int64(0)
@@ -212,7 +211,7 @@ func getBooks(svc *books.Service) ([]*libris.Book, error) {
 		}
 	}
 
-	logger.Printf("%d books processed (of a total of %d)\n", len(myBooks), totalItems)
+	logOut.Printf("%d books processed (of a total of %d)\n", len(myBooks), totalItems)
 	return myBooks, nil
 }
 
@@ -260,13 +259,13 @@ func newBook(v *books.Volume) *libris.Book {
 }
 
 func encodeBooks(books []*libris.Book, w io.Writer, r *http.Request) error {
-	logger.Printf("Requested response format: %s\n", r.Header.Get("Accept"))
+	logOut.Printf("Requested response format: %s\n", r.Header.Get("Accept"))
 
 	contentType := httputil.NegotiateContentType(r,
 		[]string{"application/json", "text/csv", "application/csv"},
 		"application/json")
 
-	logger.Printf("Negotiated content type: %s\n", contentType)
+	logOut.Printf("Negotiated content type: %s\n", contentType)
 	switch contentType {
 	case "application/json":
 		return encodeBooksAsJSON(books, w)
@@ -275,13 +274,13 @@ func encodeBooks(books []*libris.Book, w io.Writer, r *http.Request) error {
 	case "text/csv":
 		return encodeBooksAsCSV(books, w)
 	default:
-		logger.Printf("Unexpected content type %s; rendering as application/json", contentType)
+		logOut.Printf("Unexpected content type %s; rendering as application/json", contentType)
 		return encodeBooksAsJSON(books, w)
 	}
 }
 
 func encodeBooksAsJSON(books []*libris.Book, w io.Writer) error {
-	logger.Println("Encoding books as JSON")
+	logOut.Println("Encoding books as JSON")
 
 	// XXX setting headers has do be done BEFORE writing the body, or it'll be ignored!
 	if rw, ok := w.(http.ResponseWriter); ok {
@@ -302,7 +301,7 @@ func encodeBooksAsJSON(books []*libris.Book, w io.Writer) error {
 }
 
 func encodeBooksAsCSV(books []*libris.Book, w io.Writer) error {
-	logger.Println("Encoding books as CSV")
+	logOut.Println("Encoding books as CSV")
 
 	// XXX setting headers has do be done BEFORE writing the body, or it'll be ignored!
 	if rw, ok := w.(http.ResponseWriter); ok {
@@ -321,14 +320,13 @@ func encodeBooksAsCSV(books []*libris.Book, w io.Writer) error {
 func main() {
 	mux := http.NewServeMux()
 
-	mux.Handle("/", appHandler(_index))
 	mux.Handle("/google", appHandler(_google))
 	mux.Handle("/google/connect", appHandler(_googleConnect))
 	mux.Handle("/google/disconnect", appHandler(_googleDisconnect))
 	mux.Handle("/google/oauth2callback", appHandler(_googleOAuthCallback))
 
-	logger.Printf("Starting server on port %s\n", port)
-	http.ListenAndServe(":"+port, logHandler(mux))
+	logOut.Printf("Starting server on port %s\n", port)
+	http.ListenAndServe(":"+port, mux)
 }
 
 // HANDLERS & MIDDLEWARES
@@ -339,21 +337,9 @@ type appHandler func(http.ResponseWriter, *http.Request) *appError
 // ServeHTTP implements the http.Handler interface.
 func (fn appHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if err := fn(w, r); err != nil {
-		logger.Println(err)
+		logErr.Println(err)
 		http.Error(w, err.Message, err.Status)
 	}
-}
-
-// logHandler logs the time of entry and exit of the routes.
-func logHandler(handler http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		logger.Printf("Started %s %s\n", r.Method, r.URL.Path)
-		start := time.Now()
-
-		handler.ServeHTTP(w, r)
-
-		logger.Printf("Completed [%s %s] after %v\n", r.Method, r.URL.Path, time.Since(start))
-	})
 }
 
 // APPLICATION ERRORS
@@ -364,25 +350,10 @@ type appError struct {
 
 // Error implements the error interface.
 func (err appError) Error() string {
-	return fmt.Sprintf("[%d %s]: %s", err.Status, http.StatusText(err.Status), err.Message)
+	return fmt.Sprintf("[%d %s] %s", err.Status, http.StatusText(err.Status), err.Message)
 }
 
 type appErrorField func(appErr *appError)
-
-func _prefix(str string) appErrorField {
-	return func(appErr *appError) {
-		if appErr == nil {
-			return
-		}
-
-		if appErr.Message == "" {
-			appErr.Message = str
-			return
-		}
-
-		appErr.Message = str + ": " + appErr.Message
-	}
-}
 
 func _status(status int) appErrorField {
 	return func(appErr *appError) {
@@ -419,9 +390,9 @@ func errSessionError(s *sessions.Session, err error) error {
 	return fmt.Errorf("Error on session %v : %v", s, err)
 }
 
-var errAccessTokenNotFound = fmt.Errorf("User not authorized! Use the /google/connect endpoint.")
+var errAccessTokenNotFound = errors.New("User not authorized. Use the /google/connect endpoint.")
 
-var errCodeNotFound = fmt.Errorf("Code not found!")
+var errCodeNotFound = errors.New("Code not found.")
 
 func errTokenExchangeError(err error) error {
 	return fmt.Errorf("Problem with token exchange: %v", err)
