@@ -32,9 +32,28 @@ I've used Cloud Foundry here, but pick your favorite :)
 ### But I don't like Glide; I prefer <[take your pick](https://github.com/golang/go/wiki/PackageManagementTools)>!
 I've found Glide to be nice, but I have no strong opinion or experience either way. The main requirement was something supported by Cloud Foundry (which I'm also checking out), so Glide worked well enough.
 
+### OK, it's running. Now what?
+
+A running instance of `mea-libris` provides the following endpoints:
+
+#### `GET /google` 
+
+Returns your books in either JSON or CSV, depending on the request's `Accept` header. Will return 401 if the user hasn't previously allowed this instance to access her data.
+
+#### `GET /google/connect`
+Starts the auth exchange. As per OAuth, the user will be redirected to a Google consent screen to authorize this instance to get the data, and then redirected back. Will error out if this instance wasn't previously authorized in the user's Google API Console.
+
+#### `GET /google/disconnect`
+Revokes the user's authorization. Any further accesses to `/google` will be 401'ed until the user `/google/connect`s again.
+
+#### `GET /google/oauth2callback`
+This is called by Google's OAuth servers to answer `/google/connect` requests. As mentioned above, the `/google/oauth2callback` endpoint should be registered in the Google API Console as an authorized redirect URL.
+
 ## Google Books
 ### Why Google Books and not Amazon?
-Seemed like the easiest to tackle. Amazon books should come, eventually :)
+Seemed like the easiest to tackle. ~~Amazon books should come, eventually :)~~ 
+
+Upon further reading, Amazon apparently [doesn't have a public API](http://stackoverflow.com/questions/7191429/get-kindle-library-book-list) or [any interest in making one](http://www.programmableweb.com/news/why-amazon-needs-kindle-api-and-will-never-have-one/2012/10/11). There are some (ahem) solutions (hehe) for getting that list, but nothing official. 
 
 ### The books I've previously rented aren't appearing!
 Well, Google's Books API describes previously rented books as "User-rented books past their expiration time". So, if the books are expired, they're not "your" books any more ;)
