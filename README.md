@@ -49,11 +49,10 @@ Revokes the user's authorization. Any further accesses to `/google` will be 401'
 #### `GET /google/oauth2callback`
 This is called by Google's OAuth servers to answer `/google/connect` requests. As mentioned above, the `/google/oauth2callback` endpoint should be registered in the Google API Console as an authorized redirect URL.
 
-## Google Books
-### Why Google Books and not Amazon?
+## Why Google Books and not Amazon?
 Seemed like the easiest to tackle. ~~Amazon books should come, eventually :)~~ 
 
-Upon further reading, Amazon apparently [doesn't have a public API](http://stackoverflow.com/questions/7191429/get-kindle-library-book-list) or [any interest in making one](http://www.programmableweb.com/news/why-amazon-needs-kindle-api-and-will-never-have-one/2012/10/11). There are some (ahem) solutions (hehe) for getting that list, but nothing official. 
+Upon further reading, Amazon apparently [doesn't have](http://stackoverflow.com/questions/7191429/get-kindle-library-book-list) a public API or [any interest](http://www.programmableweb.com/news/why-amazon-needs-kindle-api-and-will-never-have-one/2012/10/11) in making one. So... I'd need to investigate some (ahem) alternative means to get that information in an automatic fashion. Any suggestions?
 
-### The books I've previously rented aren't appearing!
+## The books I've previously rented aren't appearing!
 Well, Google's Books API describes previously rented books as "User-rented books past their expiration time". So, if the books are expired, they're not "your" books any more ;)
