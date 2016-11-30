@@ -32,7 +32,10 @@ This command needs OAuth credentials to access your book data, which can be crea
 
 In particular, you'll need to register an authorized redirect URL, which will receive Google's auth responses. This program offers the `/google/oauth2callback` endpoint for that, so use the full URL: `https://<my-running-server>/google/oauth2callback`.
  
-This command reads four environment variables: `CLIENT_ID`, `CLIENT_SECRET`, `REDIRECT_URL` and `PORT`. `PORT` is merely the port the server will be bound to; `CLIENT_ID` and `CLIENT_SECRET` are your application's Google OAuth credentials; and `REDIRECT_URL` is the authorized redirect URL you registered at the API Console.
+This command reads four environment variables: 
+* `CLIENT_ID` and `CLIENT_SECRET`: your instance's Google OAuth credentials;
+* `REDIRECT_URL`: the authorized redirect URL you registered at the API Console;
+* `PORT`: the port the server will be bound to.
 
 ### OK, it's running. Now what?
 
@@ -54,7 +57,7 @@ This is called by Google's OAuth servers to answer `/google/connect` requests. A
 ## Why Google Books and not Amazon?
 Seemed like the easiest to tackle. ~~Amazon books should come, eventually :)~~ 
 
-Upon further reading, Amazon apparently [doesn't have](http://stackoverflow.com/questions/7191429/get-kindle-library-book-list) a public API or [any interest](http://www.programmableweb.com/news/why-amazon-needs-kindle-api-and-will-never-have-one/2012/10/11) in making one. So... I'd need to investigate some (ahem) alternative means to get that information in an automatic fashion. Any suggestions?
+Upon further reading, Amazon apparently [doesn't have](http://stackoverflow.com/questions/7191429/get-kindle-library-book-list) a public API or [any interest](http://www.programmableweb.com/news/why-amazon-needs-kindle-api-and-will-never-have-one/2012/10/11) in making one. So... I'd need some (ahem) alternative means to get that information automatically :stuck_out_tongue_winking_eye: Any suggestions?
 
 ## The books I've previously rented aren't appearing!
 Well, Google's Books API describes previously rented books as "User-rented books past their expiration time". So, if the books are expired, they're not "your" books any more ;)
