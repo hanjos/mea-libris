@@ -25,14 +25,12 @@ var (
 
 	clientID     = os.Getenv("CLIENT_ID")
 	clientSecret = os.Getenv("CLIENT_SECRET")
-	redirectURL  = os.Getenv("REDIRECT_URL")
 	port         = os.Getenv("PORT")
 
 	config = &oauth2.Config{
 		ClientID:     clientID,
 		ClientSecret: clientSecret,
 		Endpoint:     google.Endpoint,
-		RedirectURL:  redirectURL,
 		Scopes:       []string{books.BooksScope},
 	}
 
@@ -95,6 +93,9 @@ func _googleConnect(w http.ResponseWriter, r *http.Request) *appError {
 	session.Values["state"] = state
 	session.Save(r, w)
 
+	redirectURL := getRedirectURL(r)
+	logOut.Printf("The redirect URL is %v\n", redirectURL)
+	config.RedirectURL = redirectURL
 	url := config.AuthCodeURL(state)
 
 	logOut.Println("Redirecting to Google's OAuth servers for a code")
@@ -148,10 +149,15 @@ func _googleOAuthCallback(w http.ResponseWriter, r *http.Request) *appError {
 		return errWrap(errInvalidState(sessionState, r.FormValue("state")), _status(http.StatusBadRequest))
 	}
 
+	logOut.Println("Checking for errors")
+	if errMsg := r.FormValue("error"); errMsg != "" {
+		return errWrap(errCallbackError(errMsg), _status(http.StatusUnauthorized))
+	}
+
 	logOut.Println("Reading the code")
 	code := r.FormValue("code")
 	if code == "" {
-		return errWrap(errCodeNotFound, _status(http.StatusBadRequest))
+		return errWrap(errCodeNotFound, _status(http.StatusBadGateway))
 	}
 
 	defer func() {
@@ -161,10 +167,10 @@ func _googleOAuthCallback(w http.ResponseWriter, r *http.Request) *appError {
 	logOut.Println("Exchanging the code for an access token")
 	token, err := config.Exchange(context.Background(), code)
 	if err != nil {
-		return errWrap(errTokenExchangeError(err), _status(http.StatusBadRequest))
+		return errWrap(errTokenExchangeError(err), _status(http.StatusInternalServerError))
 	}
 
-	session.Values["accessToken"] = token.AccessToken // XXX can't store a *oauth2.Token, so store a string
+	session.Values["accessToken"] = token.AccessToken // XXX can't store a *oauth2.Token, so we store a string
 	session.Save(r, w)
 
 	logOut.Println("Redirecting to /google/connect to finish the auth process")
@@ -173,6 +179,21 @@ func _googleOAuthCallback(w http.ResponseWriter, r *http.Request) *appError {
 }
 
 // STEP FUNCTIONS
+func getRedirectURL(r *http.Request) string {
+	if fromEnv := os.Getenv("REDIRECT_URL"); fromEnv != "" {
+		logOut.Println("Using the environment variable REDIRECT_URL")
+		return fromEnv
+	}
+
+	logOut.Println("Building the redirect URL from the request")
+	scheme := r.URL.Scheme // this may be empty, use 'http' by default
+	if scheme == "" {
+		scheme = "http"
+	}
+
+	return scheme + "://" + r.Host + "/google/oauth2callback"
+}
+
 func newBooksClient(ctx context.Context, token string) (*books.Service, error) {
 	logOut.Println("Using the access token to build a Google Books client")
 
@@ -389,9 +410,13 @@ func errInvalidState(expected, actual string) error {
 	return fmt.Errorf("Invalid state parameter: expected %s; got %s", expected, actual)
 }
 
-var errAccessTokenNotFound = errors.New("User not authorized. Use the /google/connect endpoint.")
+func errCallbackError(message string) error {
+	return fmt.Errorf("Callback received error: %v", message)
+}
 
 var errCodeNotFound = errors.New("Code not found.")
+
+var errAccessTokenNotFound = errors.New("User not authorized. Use the /google/connect endpoint.")
 
 func errTokenExchangeError(err error) error {
 	return fmt.Errorf("Problem with token exchange: %v", err)
