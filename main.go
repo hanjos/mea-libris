@@ -1,7 +1,6 @@
 package main
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -308,14 +307,9 @@ func encodeBooksAsJSON(books []*libris.Book, w io.Writer) error {
 		rw.Header().Set("Content-Type", "application/json;charset=utf-8")
 	}
 
-	booksJSON, err := json.Marshal(books)
+	err := libris.Books(books).EncodeJSON(w)
 	if err != nil {
-		return errCantMarshalBooksToJSON(err)
-	}
-
-	_, err2 := fmt.Fprintf(w, "%s", booksJSON)
-	if err2 != nil {
-		return errCantWriteResponse(err2)
+		return errCantEncodeBooks(err)
 	}
 
 	return nil
@@ -331,7 +325,7 @@ func encodeBooksAsCSV(books []*libris.Book, w io.Writer) error {
 
 	err := libris.Books(books).EncodeCSV(w)
 	if err != nil {
-		return err
+		return errCantEncodeBooks(err)
 	}
 
 	return nil
@@ -428,12 +422,8 @@ func errCantLoadVolumes(err error) error {
 	return fmt.Errorf("Couldn't load the user's volumes: %v", err)
 }
 
-func errCantMarshalBooksToJSON(err error) error {
-	return fmt.Errorf("Couldn't marshal the books' info to JSON: %v", err)
-}
-
-func errCantWriteResponse(err error) error {
-	return fmt.Errorf("Couldn't write response: %v", err)
+func errCantEncodeBooks(err error) error {
+	return fmt.Errorf("Couldn't encode the books: %v", err)
 }
 
 func errCantRevokeToken(err error) error {

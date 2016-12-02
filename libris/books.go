@@ -2,6 +2,7 @@ package libris
 
 import (
 	"encoding/csv"
+	"encoding/json"
 	"fmt"
 	"io"
 	"strings"
@@ -47,8 +48,8 @@ func (bs Books) marshalCSV() [][]string {
 	return result
 }
 
-// EncodeCSV writes the given books to the given io.Writer. Returns all errors found bundled in a single error, or nil
-// if everything went ok.
+// EncodeCSV writes the given books to the given io.Writer as CSV. Returns all errors found bundled in a single error,
+// or nil if everything went ok.
 func (bs Books) EncodeCSV(writer io.Writer) error {
 	w := csv.NewWriter(writer)
 	records := bs.marshalCSV()
@@ -69,4 +70,20 @@ func (bs Books) EncodeCSV(writer io.Writer) error {
 	}
 
 	return n.ToError()
+}
+
+// EncodeJSON writes the given books to the given io.Writer as JSON. Returns all errors found bundled in a single
+// error, or nil if everything went ok.
+func (bs Books) EncodeJSON(writer io.Writer) error {
+	booksJSON, err := json.Marshal(bs)
+	if err != nil {
+		return err
+	}
+
+	_, err2 := fmt.Fprintf(writer, "%s", booksJSON)
+	if err2 != nil {
+		return err
+	}
+
+	return nil
 }
