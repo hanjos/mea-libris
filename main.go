@@ -93,7 +93,8 @@ func _googleConnect(w http.ResponseWriter, r *http.Request) *appError {
 	session.Values["state"] = state
 	session.Save(r, w)
 
-	redirectURL := getRedirectURL(r)
+	redirectURL, how := getRedirectURL(r)
+	logOut.Printf("%v\n", how)
 	logOut.Printf("The redirect URL is %v\n", redirectURL)
 	config.RedirectURL = redirectURL
 	url := config.AuthCodeURL(state)
@@ -179,19 +180,17 @@ func _googleOAuthCallback(w http.ResponseWriter, r *http.Request) *appError {
 }
 
 // STEP FUNCTIONS
-func getRedirectURL(r *http.Request) string {
+func getRedirectURL(r *http.Request) (redirectURL string, how string) {
 	if fromEnv := os.Getenv("REDIRECT_URL"); fromEnv != "" {
-		logOut.Println("Using the environment variable REDIRECT_URL")
-		return fromEnv
+		return fromEnv, "Using the environment variable REDIRECT_URL"
 	}
 
-	logOut.Println("Building the redirect URL from the request")
 	scheme := r.URL.Scheme // this may be empty, use 'http' by default
 	if scheme == "" {
 		scheme = "http"
 	}
 
-	return scheme + "://" + r.Host + "/google/oauth2callback"
+	return scheme + "://" + r.Host + "/google/oauth2callback", "Building the redirect URL from the request"
 }
 
 func newBooksClient(ctx context.Context, token string) (*books.Service, error) {
