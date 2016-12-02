@@ -89,7 +89,6 @@ func _googleConnect(w http.ResponseWriter, r *http.Request) *appError {
 	logOut.Println("User not authorized; beginning auth exchange")
 	logOut.Println("Generating a new state")
 	state := randomString()
-
 	session.Values["state"] = state
 	session.Save(r, w)
 
@@ -126,7 +125,6 @@ func _googleDisconnect(w http.ResponseWriter, r *http.Request) *appError {
 		return errWrap(errCantRevokeToken(err), _status(http.StatusInternalServerError))
 	}
 
-	// Reset the user's session
 	logOut.Println("Resetting the session")
 	session.Values["state"] = nil
 	session.Values["accessToken"] = nil
@@ -353,6 +351,7 @@ func main() {
 }
 
 // HANDLERS & MIDDLEWARES
+
 // appHandler runs the given function and sends the data in *appError, if any, to http.Error.
 // Does nothing if *appError is nil.
 type appHandler func(http.ResponseWriter, *http.Request) *appError
