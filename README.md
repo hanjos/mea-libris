@@ -39,7 +39,7 @@ Yeah... `mea-libris` can build the redirect URL itself, but:
 * Google demands the URL to be an exact match (scheme, host, port and path) with what's registered in the API Console; and 
 * I don't know a sure-fire way to get all the information needed (*e.g.* the scheme isn't always there, so `mea-libris` defaults to `http`). 
 
-So `mea-libris` will prefer the contents of the `REDIRECT_URL` environment variable, if available, to building the URL by hand (robotic gripper?).
+So, as an escape hatch, `mea-libris` will use the contents of the `REDIRECT_URL` environment variable, if available.
 
 ## How do I build this?
 
