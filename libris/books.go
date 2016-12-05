@@ -1,3 +1,4 @@
+// Package libris defines the Book type, which represents the user's books, and methods to encode books in JSON or CSV.
 package libris
 
 import (
@@ -80,8 +81,8 @@ func (bs Books) EncodeJSON(writer io.Writer) error {
 		return err
 	}
 
-	_, err2 := fmt.Fprintf(writer, "%s", booksJSON)
-	if err2 != nil {
+	_, err = fmt.Fprintf(writer, "%s", booksJSON)
+	if err != nil {
 		return err
 	}
 

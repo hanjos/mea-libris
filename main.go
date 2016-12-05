@@ -1,3 +1,18 @@
+/*
+mea-libris starts a web server which shows your books. Right now, Google Books is the only service supported.
+
+It needs 2 environment variables to function:
+
+	CLIENT_ID and CLIENT_SECRET: this app's Google credentials. Necessary to reach your books via OAuth.
+
+mea-libris will use other 2 environment variables if available:
+
+	PORT: the port which this server will listen to. Defaults to 8080.
+	REDIRECT_URL: the URL Google's OAuth server will respond to, as part of the OAuth authorization flow.
+		Defaults to (request.URL.Scheme || http)://(request.Host)/google/oauth2callback.
+
+More details at https://github.com/hanjos/mea-libris .
+*/
 package main
 
 import (
@@ -24,7 +39,7 @@ var (
 
 	clientID     = os.Getenv("CLIENT_ID")
 	clientSecret = os.Getenv("CLIENT_SECRET")
-	port         = os.Getenv("PORT")
+	port         = defaultValue(os.Getenv("PORT"), "8080")
 
 	config = &oauth2.Config{
 		ClientID:     clientID,
@@ -433,4 +448,12 @@ func errCantRevokeToken(err error) error {
 // UTILITIES
 func randomString() string {
 	return fmt.Sprintf("st%d", time.Now().UnixNano())
+}
+
+func defaultValue(v string, def string) string {
+	if v == "" {
+		return def
+	}
+
+	return v
 }
