@@ -9,11 +9,12 @@ This command needs OAuth credentials to access your book data, which can be crea
 
 In particular, you'll need to register an authorized redirect URL, which will receive Google's auth responses. This program offers the `/google/oauth2callback` endpoint for that, so use the full URL: `http://<my-running-server>/google/oauth2callback`.
  
-This command also reads three environment variables, which need to be set properly: 
-* `CLIENT_ID` and `CLIENT_SECRET`: your instance's Google OAuth credentials;
-* `PORT`: the port the server will be bound to.
+Your instance's Google OAuth credentials are read via two environment variables, `CLIENT_ID` and `CLIENT_SECRET`.
 
-Optionally, one can use a fourth environment variable, `REDIRECT_URL`, to force a specific redirect URL. More on this below.
+Optionally, this command also reads two more environment variables:
+
+* `PORT`: the port the server will be bound to. Defaults to 8080.
+* `REDIRECT_URL`: forces a specific redirect URL. More on this below.
 
 ### OK, it's running. Now what?
 
