@@ -1,15 +1,16 @@
 /*
 mea-libris starts a web server which shows your books. Right now, Google Books is the only service supported.
 
-It needs 2 environment variables to function:
-
-	CLIENT_ID and CLIENT_SECRET: this app's Google credentials. Necessary to reach your books via OAuth.
+It needs 2 environment variables to function: CLIENT_ID and CLIENT_SECRET, which are this app's Google credentials.
+They are necessary to reach your Google books via OAuth.
 
 mea-libris will use other 2 environment variables if available:
 
 	PORT: the port which this server will listen to. Defaults to 8080.
-	REDIRECT_URL: the URL Google's OAuth server will respond to, as part of the OAuth authorization flow.
-		Defaults to (request.URL.Scheme || http)://(request.Host)/google/oauth2callback.
+
+	REDIRECT_URL: the URL Google's OAuth server will respond to, as part of
+	  the OAuth authorization flow. Defaults to
+	  (request.URL.Scheme || http)://(request.Host)/google/oauth2callback.
 
 More details at https://github.com/hanjos/mea-libris .
 */
@@ -192,7 +193,8 @@ func _googleOAuthCallback(w http.ResponseWriter, r *http.Request) *appError {
 }
 
 // STEP FUNCTIONS
-func getRedirectURL(r *http.Request) (redirectURL string, how string) {
+// getRedirectURL reads the given request and returns both a redirect URL, and how it was determined.
+func getRedirectURL(r *http.Request) (string, string) {
 	if fromEnv := os.Getenv("REDIRECT_URL"); fromEnv != "" {
 		return fromEnv, "Using the environment variable REDIRECT_URL"
 	}
