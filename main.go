@@ -28,6 +28,7 @@ import (
 
 	"github.com/golang/gddo/httputil"
 	"github.com/gorilla/sessions"
+	"github.com/hanjos/mea-libris/app"
 	"github.com/hanjos/mea-libris/libris"
 	"golang.org/x/net/context"
 	"golang.org/x/oauth2"
@@ -42,12 +43,7 @@ var (
 	clientSecret = os.Getenv("CLIENT_SECRET")
 	port         = defaultValue(os.Getenv("PORT"), "8080")
 
-	config = &oauth2.Config{
-		ClientID:     clientID,
-		ClientSecret: clientSecret,
-		Endpoint:     google.Endpoint,
-		Scopes:       []string{books.BooksScope},
-	}
+	goog = newGoogleService(clientID, clientSecret)
 
 	store = sessions.NewCookieStore([]byte(randomString()))
 
@@ -56,42 +52,64 @@ var (
 	logErr = log.New(os.Stderr, "[mea-libris] ", 0)
 )
 
+// SERVICES
+type googleService struct {
+	app.DefaultService
+}
+
+func newGoogleService(clientID, clientSecret string) app.Service {
+	s := &googleService{}
+
+	s.Config_ = &oauth2.Config{
+		ClientID:     clientID,
+		ClientSecret: clientSecret,
+		Endpoint:     google.Endpoint,
+		Scopes:       []string{books.BooksScope},
+	}
+	s.Books_ = app.Endpoint{"/google", s.books}
+	s.Connect_ = app.Endpoint{"/google/connect", s.connect}
+	s.Disconnect_ = app.Endpoint{"/google/disconnect", s.disconnect}
+	s.OAuthCallback_ = app.Endpoint{"/google/oauth2callback", s.oAuthCallback}
+
+	return s
+}
+
 // ROUTES
-func _google(w http.ResponseWriter, r *http.Request) *appError {
+func (goog *googleService) books(w http.ResponseWriter, r *http.Request) *app.Error {
 	session, err := store.Get(r, sessionName)
 	if err != nil {
 		// TODO ignoring session errors
-		//return errWrap(errSessionError(sessionName, err), _status(http.StatusInternalServerError))
+		//return app.Wrap(errSessionError(sessionName, err), http.StatusInternalServerError)
 	}
 
 	token, ok := session.Values["accessToken"].(string)
 	if !ok {
-		return errWrap(errAccessTokenNotFound, _status(http.StatusUnauthorized))
+		return app.Wrap(errAccessTokenNotFound, http.StatusUnauthorized)
 	}
 
-	svc, err := newBooksClient(context.Background(), token)
+	svc, err := newGoogleBooksClient(goog.Config(), context.Background(), token)
 	if err != nil {
-		return errWrap(err, _status(http.StatusInternalServerError))
+		return app.Wrap(err, http.StatusInternalServerError)
 	}
 
-	bs, err := getBooks(svc)
+	bs, err := getGoogleBooks(svc)
 	if err != nil {
-		return errWrap(err, _status(http.StatusInternalServerError))
+		return app.Wrap(err, http.StatusInternalServerError)
 	}
 
 	err = encodeBooks(bs, w, r)
 	if err != nil {
-		return errWrap(err, _status(http.StatusInternalServerError))
+		return app.Wrap(err, http.StatusInternalServerError)
 	}
 
 	return nil
 }
 
-func _googleConnect(w http.ResponseWriter, r *http.Request) *appError {
+func (goog *googleService) connect(w http.ResponseWriter, r *http.Request) *app.Error {
 	session, err := store.Get(r, sessionName)
 	if err != nil {
 		// TODO ignoring session errors
-		//return errWrap(errSessionError(sessionName, err), _status(http.StatusInternalServerError))
+		//return app.Wrap(errSessionError(sessionName, err), http.StatusInternalServerError)
 	}
 
 	_, ok := session.Values["accessToken"].(string)
@@ -107,8 +125,8 @@ func _googleConnect(w http.ResponseWriter, r *http.Request) *appError {
 	session.Values["state"] = state
 	session.Save(r, w)
 
-	redirectURL, how := getRedirectURL(r)
-	logOut.Printf("%v\n", how)
+	config := goog.Config()
+	redirectURL := defaultValue(os.Getenv("REDIRECT_URL"), app.BuildRedirectURL(goog, r))
 	logOut.Printf("The redirect URL is %v\n", redirectURL)
 	config.RedirectURL = redirectURL
 	url := config.AuthCodeURL(state)
@@ -118,11 +136,11 @@ func _googleConnect(w http.ResponseWriter, r *http.Request) *appError {
 	return nil
 }
 
-func _googleDisconnect(w http.ResponseWriter, r *http.Request) *appError {
+func (goog *googleService) disconnect(w http.ResponseWriter, r *http.Request) *app.Error {
 	session, err := store.Get(r, sessionName)
 	if err != nil {
 		// TODO ignoring session errors
-		//return errWrap(errSessionError(sessionName, err), _status(http.StatusInternalServerError))
+		//return app.Wrap(errSessionError(sessionName, err), http.StatusInternalServerError)
 	}
 
 	token, ok := session.Values["accessToken"].(string)
@@ -137,7 +155,7 @@ func _googleDisconnect(w http.ResponseWriter, r *http.Request) *appError {
 	resp, err := http.Get(url)
 	defer resp.Body.Close()
 	if err != nil {
-		return errWrap(errCantRevokeToken(err), _status(http.StatusInternalServerError))
+		return app.Wrap(errCantRevokeToken(err), http.StatusInternalServerError)
 	}
 
 	logOut.Println("Resetting the session")
@@ -149,29 +167,29 @@ func _googleDisconnect(w http.ResponseWriter, r *http.Request) *appError {
 	return nil
 }
 
-func _googleOAuthCallback(w http.ResponseWriter, r *http.Request) *appError {
+func (goog *googleService) oAuthCallback(w http.ResponseWriter, r *http.Request) *app.Error {
 	logOut.Println("Validating the state")
 
 	session, err := store.Get(r, sessionName)
 	if err != nil {
 		// TODO ignoring session errors
-		//return errWrap(errSessionError(sessionName, err), _status(http.StatusInternalServerError))
+		//return app.Wrap(errSessionError(sessionName, err), http.StatusInternalServerError)
 	}
 
 	sessionState, ok := session.Values["state"].(string)
 	if !ok || r.FormValue("state") != sessionState {
-		return errWrap(errInvalidState(sessionState, r.FormValue("state")), _status(http.StatusBadRequest))
+		return app.Wrap(errInvalidState(sessionState, r.FormValue("state")), http.StatusBadRequest)
 	}
 
 	logOut.Println("Checking for errors")
 	if errMsg := r.FormValue("error"); errMsg != "" {
-		return errWrap(errCallbackError(errMsg), _status(http.StatusUnauthorized))
+		return app.Wrap(errCallbackError(errMsg), http.StatusUnauthorized)
 	}
 
 	logOut.Println("Reading the code")
 	code := r.FormValue("code")
 	if code == "" {
-		return errWrap(errCodeNotFound, _status(http.StatusBadGateway))
+		return app.Wrap(errCodeNotFound, http.StatusBadGateway)
 	}
 
 	defer func() {
@@ -179,35 +197,24 @@ func _googleOAuthCallback(w http.ResponseWriter, r *http.Request) *appError {
 	}()
 
 	logOut.Println("Exchanging the code for an access token")
+	config := goog.Config()
 	token, err := config.Exchange(context.Background(), code)
 	if err != nil {
-		return errWrap(errTokenExchangeError(err), _status(http.StatusInternalServerError))
+		return app.Wrap(errTokenExchangeError(err), http.StatusInternalServerError)
 	}
 
 	session.Values["accessToken"] = token.AccessToken // XXX can't store a *oauth2.Token, so we store a string
 	session.Save(r, w)
 
-	logOut.Println("Redirecting to /google/connect to finish the auth process")
-	http.Redirect(w, r, "/google/connect", http.StatusTemporaryRedirect)
+	connectEndpoint := goog.Connect().Endpoint
+	logOut.Printf("Redirecting to %v to finish the auth process\n", connectEndpoint)
+	http.Redirect(w, r, connectEndpoint, http.StatusTemporaryRedirect)
 	return nil
 }
 
 // STEP FUNCTIONS
-// getRedirectURL reads the given request and returns both a redirect URL, and how it was determined.
-func getRedirectURL(r *http.Request) (string, string) {
-	if fromEnv := os.Getenv("REDIRECT_URL"); fromEnv != "" {
-		return fromEnv, "Using the environment variable REDIRECT_URL"
-	}
 
-	scheme := r.URL.Scheme // this may be empty, use 'http' by default
-	if scheme == "" {
-		scheme = "http"
-	}
-
-	return scheme + "://" + r.Host + "/google/oauth2callback", "Building the redirect URL from the request"
-}
-
-func newBooksClient(ctx context.Context, token string) (*books.Service, error) {
+func newGoogleBooksClient(config *oauth2.Config, ctx context.Context, token string) (*books.Service, error) {
 	logOut.Println("Using the access token to build a Google Books client")
 
 	tok := new(oauth2.Token)
@@ -222,7 +229,7 @@ func newBooksClient(ctx context.Context, token string) (*books.Service, error) {
 	return svc, nil
 }
 
-func getBooks(svc *books.Service) ([]*libris.Book, error) {
+func getGoogleBooks(svc *books.Service) ([]*libris.Book, error) {
 	logOut.Print("Getting the user's books")
 
 	myBooks := []*libris.Book{}
@@ -352,10 +359,10 @@ func encodeBooksAsCSV(books []*libris.Book, w io.Writer) error {
 func main() {
 	mux := http.NewServeMux()
 
-	mux.Handle("/google", appHandler(_google))
-	mux.Handle("/google/connect", appHandler(_googleConnect))
-	mux.Handle("/google/disconnect", appHandler(_googleDisconnect))
-	mux.Handle("/google/oauth2callback", appHandler(_googleOAuthCallback))
+	handleEndpoint(mux, goog.Books())
+	handleEndpoint(mux, goog.Connect())
+	handleEndpoint(mux, goog.Disconnect())
+	handleEndpoint(mux, goog.OAuthCallback())
 
 	logOut.Printf("Starting server on port %s\n", port)
 	http.ListenAndServe(":"+port, mux)
@@ -363,58 +370,59 @@ func main() {
 
 // HANDLERS & MIDDLEWARES
 
-// appHandler runs the given function and sends the data in *appError, if any, to http.Error.
-// Does nothing if *appError is nil.
-type appHandler func(http.ResponseWriter, *http.Request) *appError
+// logging middleware
+type statusResponseWriter interface {
+	http.ResponseWriter
+	http.Flusher
 
-// ServeHTTP implements the http.Handler interface.
-func (fn appHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	if err := fn(w, r); err != nil {
-		logErr.Println(err)
-		http.Error(w, err.Message, err.Status)
+	Status() int
+}
+
+type statusResponseLogger struct {
+	w      http.ResponseWriter
+	status int
+}
+
+func (s *statusResponseLogger) Header() http.Header {
+	return s.w.Header()
+}
+
+func (s *statusResponseLogger) Write(b []byte) (int, error) {
+	if s.status == 0 {
+		s.status = http.StatusOK
 	}
+
+	return s.w.Write(b)
+}
+
+func (s *statusResponseLogger) WriteHeader(status int) {
+	s.w.WriteHeader(status)
+	s.status = status
+}
+
+func (s *statusResponseLogger) Status() int {
+	return s.status
+}
+
+func (s *statusResponseLogger) Flush() {
+	if f, ok := s.w.(http.Flusher); ok {
+		f.Flush()
+	}
+}
+
+func loggingHandler(h http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		lw := &statusResponseLogger{w: w, status: http.StatusOK}
+
+		h.ServeHTTP(lw, r)
+
+		if lw.Status() >= 400 {
+			logErr.Printf("Response error %d: %s\n", lw.Status(), http.StatusText(lw.Status()))
+		}
+	})
 }
 
 // APPLICATION ERRORS
-type appError struct {
-	Message string
-	Status  int
-}
-
-// Error implements the error interface.
-func (err appError) Error() string {
-	return fmt.Sprintf("[%d %s] %s", err.Status, http.StatusText(err.Status), err.Message)
-}
-
-type appErrorField func(appErr *appError)
-
-func _status(status int) appErrorField {
-	return func(appErr *appError) {
-		if appErr == nil {
-			return
-		}
-
-		appErr.Status = status
-	}
-}
-
-func errWrap(err error, fields ...appErrorField) *appError {
-	if err == nil {
-		return nil
-	}
-
-	if appErr, ok := err.(*appError); ok {
-		return appErr
-	}
-
-	appErr := &appError{err.Error(), http.StatusInternalServerError}
-	for _, field := range fields {
-		field(appErr)
-	}
-
-	return appErr
-}
-
 func errInvalidState(expected, actual string) error {
 	return fmt.Errorf("Invalid state parameter: expected %s; got %s", expected, actual)
 }
@@ -448,6 +456,10 @@ func errCantRevokeToken(err error) error {
 }
 
 // UTILITIES
+func handleEndpoint(mux *http.ServeMux, endpoint app.Endpoint) {
+	mux.Handle(endpoint.Endpoint, loggingHandler(endpoint.Handler))
+}
+
 func randomString() string {
 	return fmt.Sprintf("st%d", time.Now().UnixNano())
 }
