@@ -1,14 +1,14 @@
 /*
 mea-libris starts a web server which shows your books. Right now, Google Books is the only service supported.
 
-It needs 2 environment variables to function: CLIENT_ID and CLIENT_SECRET, which are this app's Google credentials.
-They are necessary to reach your Google books via OAuth.
+It needs 2 environment variables to function: GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET, which are this app's Google
+credentials. They are necessary to reach your Google books via OAuth.
 
 mea-libris will use other 2 environment variables if available:
 
 	PORT: the port which this server will listen to. Defaults to 8080.
 
-	REDIRECT_URL: the URL Google's OAuth server will respond to, as part of
+	GOOGLE_REDIRECT_URL: the URL Google's OAuth server will respond to, as part of
 	  the OAuth authorization flow. Defaults to
 	  (request.URL.Scheme || http)://(request.Host)/google/oauth2callback.
 
@@ -27,6 +27,7 @@ import (
 	"time"
 
 	"github.com/golang/gddo/httputil"
+	"github.com/gorilla/mux"
 	"github.com/gorilla/sessions"
 	"github.com/hanjos/mea-libris/app"
 	"github.com/hanjos/mea-libris/libris"
@@ -39,8 +40,8 @@ import (
 var (
 	sessionName = "sessionName"
 
-	clientID     = os.Getenv("CLIENT_ID")
-	clientSecret = os.Getenv("CLIENT_SECRET")
+	clientID     = os.Getenv("GOOGLE_CLIENT_ID")
+	clientSecret = os.Getenv("GOOGLE_CLIENT_SECRET")
 	port         = defaultValue(os.Getenv("PORT"), "8080")
 
 	goog = newGoogleService(clientID, clientSecret)
@@ -54,28 +55,28 @@ var (
 
 // SERVICES
 type googleService struct {
-	app.DefaultService
+	app.Service
+	app.Router
+	app.Client
 }
 
 func newGoogleService(clientID, clientSecret string) app.Service {
-	s := &googleService{}
-
-	s.Config_ = &oauth2.Config{
-		ClientID:     clientID,
-		ClientSecret: clientSecret,
-		Endpoint:     google.Endpoint,
-		Scopes:       []string{books.BooksScope},
+	s := &googleService{
+		app.NewService(),
+		app.NewRouter("/google"),
+		app.NewClient(
+			&oauth2.Config{
+				ClientID:     clientID,
+				ClientSecret: clientSecret,
+				Endpoint:     google.Endpoint,
+				Scopes:       []string{books.BooksScope},
+			}),
 	}
-	s.Books_ = app.Endpoint{"/google", s.books}
-	s.Connect_ = app.Endpoint{"/google/connect", s.connect}
-	s.Disconnect_ = app.Endpoint{"/google/disconnect", s.disconnect}
-	s.OAuthCallback_ = app.Endpoint{"/google/oauth2callback", s.oAuthCallback}
 
 	return s
 }
 
-// ROUTES
-func (goog *googleService) books(w http.ResponseWriter, r *http.Request) *app.Error {
+func (goog *googleService) HandleBooks(w http.ResponseWriter, r *http.Request) *app.Error {
 	session, err := store.Get(r, sessionName)
 	if err != nil {
 		// TODO ignoring session errors
@@ -105,7 +106,7 @@ func (goog *googleService) books(w http.ResponseWriter, r *http.Request) *app.Er
 	return nil
 }
 
-func (goog *googleService) connect(w http.ResponseWriter, r *http.Request) *app.Error {
+func (goog *googleService) HandleConnect(w http.ResponseWriter, r *http.Request) *app.Error {
 	session, err := store.Get(r, sessionName)
 	if err != nil {
 		// TODO ignoring session errors
@@ -126,7 +127,7 @@ func (goog *googleService) connect(w http.ResponseWriter, r *http.Request) *app.
 	session.Save(r, w)
 
 	config := goog.Config()
-	redirectURL := defaultValue(os.Getenv("REDIRECT_URL"), app.BuildRedirectURL(goog, r))
+	redirectURL := defaultValue(os.Getenv("GOOGLE_REDIRECT_URL"), app.BuildRedirectURL(r, goog))
 	logOut.Printf("The redirect URL is %v\n", redirectURL)
 	config.RedirectURL = redirectURL
 	url := config.AuthCodeURL(state)
@@ -136,7 +137,7 @@ func (goog *googleService) connect(w http.ResponseWriter, r *http.Request) *app.
 	return nil
 }
 
-func (goog *googleService) disconnect(w http.ResponseWriter, r *http.Request) *app.Error {
+func (goog *googleService) HandleDisconnect(w http.ResponseWriter, r *http.Request) *app.Error {
 	session, err := store.Get(r, sessionName)
 	if err != nil {
 		// TODO ignoring session errors
@@ -167,7 +168,7 @@ func (goog *googleService) disconnect(w http.ResponseWriter, r *http.Request) *a
 	return nil
 }
 
-func (goog *googleService) oAuthCallback(w http.ResponseWriter, r *http.Request) *app.Error {
+func (goog *googleService) HandleOAuthCallback(w http.ResponseWriter, r *http.Request) *app.Error {
 	logOut.Println("Validating the state")
 
 	session, err := store.Get(r, sessionName)
@@ -206,14 +207,13 @@ func (goog *googleService) oAuthCallback(w http.ResponseWriter, r *http.Request)
 	session.Values["accessToken"] = token.AccessToken // XXX can't store a *oauth2.Token, so we store a string
 	session.Save(r, w)
 
-	connectEndpoint := goog.Connect().Endpoint
+	connectEndpoint := goog.Route("/connect")
 	logOut.Printf("Redirecting to %v to finish the auth process\n", connectEndpoint)
 	http.Redirect(w, r, connectEndpoint, http.StatusTemporaryRedirect)
 	return nil
 }
 
 // STEP FUNCTIONS
-
 func newGoogleBooksClient(config *oauth2.Config, ctx context.Context, token string) (*books.Service, error) {
 	logOut.Println("Using the access token to build a Google Books client")
 
@@ -357,15 +357,21 @@ func encodeBooksAsCSV(books []*libris.Book, w io.Writer) error {
 
 // MAIN
 func main() {
-	mux := http.NewServeMux()
+	r := mux.NewRouter().StrictSlash(true) // XXX so that /google and /google/ match
 
-	handleEndpoint(mux, goog.Books())
-	handleEndpoint(mux, goog.Connect())
-	handleEndpoint(mux, goog.Disconnect())
-	handleEndpoint(mux, goog.OAuthCallback())
+	if gRout, ok := goog.(app.Router); ok {
+		stack := logging
+
+		r.Handle(gRout.Books(), stack(app.Handler(goog.HandleBooks)))
+		r.Handle(gRout.Connect(), stack(app.Handler(goog.HandleConnect)))
+		r.Handle(gRout.Disconnect(), stack(app.Handler(goog.HandleDisconnect)))
+		r.Handle(gRout.OAuthCallback(), stack(app.Handler(goog.HandleOAuthCallback)))
+	} else {
+		logErr.Fatalln("No Google endpoints handled!")
+	}
 
 	logOut.Printf("Starting server on port %s\n", port)
-	http.ListenAndServe(":"+port, mux)
+	http.ListenAndServe(":"+port, r)
 }
 
 // HANDLERS & MIDDLEWARES
@@ -410,14 +416,14 @@ func (s *statusResponseLogger) Flush() {
 	}
 }
 
-func loggingHandler(h http.Handler) http.Handler {
+func logging(h http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		lw := &statusResponseLogger{w: w, status: http.StatusOK}
 
 		h.ServeHTTP(lw, r)
 
 		if lw.Status() >= 400 {
-			logErr.Printf("Response error %d: %s\n", lw.Status(), http.StatusText(lw.Status()))
+			logErr.Printf("Error %d: %s\n", lw.Status(), http.StatusText(lw.Status()))
 		}
 	})
 }
@@ -456,10 +462,6 @@ func errCantRevokeToken(err error) error {
 }
 
 // UTILITIES
-func handleEndpoint(mux *http.ServeMux, endpoint app.Endpoint) {
-	mux.Handle(endpoint.Endpoint, loggingHandler(endpoint.Handler))
-}
-
 func randomString() string {
 	return fmt.Sprintf("st%d", time.Now().UnixNano())
 }
