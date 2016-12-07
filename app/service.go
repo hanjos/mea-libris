@@ -4,7 +4,6 @@ import (
 	"net/http"
 
 	"golang.org/x/oauth2"
-	"log"
 )
 
 type Client interface {
@@ -48,7 +47,6 @@ func NewService() Service {
 }
 
 func (s *defaultService) HandleBooks(w http.ResponseWriter, r *http.Request) *Error {
-	log.Println("defaultService: /books")
 	return nil
 }
 
