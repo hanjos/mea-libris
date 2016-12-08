@@ -11,7 +11,6 @@ type Handler func(w http.ResponseWriter, r *http.Request) *Error
 // ServeHTTP implements the http.Handler interface.
 func (fn Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if err := fn(w, r); err != nil {
-		//logErr.Println(err)
 		http.Error(w, err.Message, err.Status)
 	}
 }

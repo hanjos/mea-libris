@@ -40,11 +40,12 @@ import (
 var (
 	sessionName = "sessionName"
 
-	clientID     = os.Getenv("GOOGLE_CLIENT_ID")
-	clientSecret = os.Getenv("GOOGLE_CLIENT_SECRET")
-	port         = defaultValue(os.Getenv("PORT"), "8080")
+	googleClientID     = os.Getenv("GOOGLE_CLIENT_ID")
+	googleClientSecret = os.Getenv("GOOGLE_CLIENT_SECRET")
+	googleRedirectURL  = os.Getenv("GOOGLE_REDIRECT_URL")
+	port               = defaultTo(os.Getenv("PORT"), "8080")
 
-	goog = newGoogleService(clientID, clientSecret)
+	goog = newGoogleProvider(googleClientID, googleClientSecret)
 
 	store = sessions.NewCookieStore([]byte(randomString()))
 
@@ -54,14 +55,14 @@ var (
 )
 
 // SERVICES
-type googleService struct {
+type googleProvider struct {
 	app.Service
 	app.Router
 	app.Client
 }
 
-func newGoogleService(clientID, clientSecret string) app.Service {
-	s := &googleService{
+func newGoogleProvider(clientID, clientSecret string) *googleProvider {
+	return &googleProvider{
 		app.NewService(),
 		app.NewRouter("/google"),
 		app.NewClient(
@@ -72,11 +73,9 @@ func newGoogleService(clientID, clientSecret string) app.Service {
 				Scopes:       []string{books.BooksScope},
 			}),
 	}
-
-	return s
 }
 
-func (goog *googleService) HandleBooks(w http.ResponseWriter, r *http.Request) *app.Error {
+func (goog *googleProvider) HandleBooks(w http.ResponseWriter, r *http.Request) *app.Error {
 	session, err := store.Get(r, sessionName)
 	if err != nil {
 		// TODO ignoring session errors
@@ -106,7 +105,7 @@ func (goog *googleService) HandleBooks(w http.ResponseWriter, r *http.Request) *
 	return nil
 }
 
-func (goog *googleService) HandleConnect(w http.ResponseWriter, r *http.Request) *app.Error {
+func (goog *googleProvider) HandleConnect(w http.ResponseWriter, r *http.Request) *app.Error {
 	session, err := store.Get(r, sessionName)
 	if err != nil {
 		// TODO ignoring session errors
@@ -126,18 +125,18 @@ func (goog *googleService) HandleConnect(w http.ResponseWriter, r *http.Request)
 	session.Values["state"] = state
 	session.Save(r, w)
 
+	redirectURL := defaultTo(googleRedirectURL, app.BuildRedirectURL(r, goog))
+	logOut.Printf("Setting the redirect URL to %s", redirectURL)
 	config := goog.Config()
-	redirectURL := defaultValue(os.Getenv("GOOGLE_REDIRECT_URL"), app.BuildRedirectURL(r, goog))
-	logOut.Printf("The redirect URL is %v\n", redirectURL)
 	config.RedirectURL = redirectURL
-	url := config.AuthCodeURL(state)
 
 	logOut.Println("Redirecting to Google's OAuth servers for a code")
+	url := config.AuthCodeURL(state)
 	http.Redirect(w, r, url, http.StatusTemporaryRedirect)
 	return nil
 }
 
-func (goog *googleService) HandleDisconnect(w http.ResponseWriter, r *http.Request) *app.Error {
+func (goog *googleProvider) HandleDisconnect(w http.ResponseWriter, r *http.Request) *app.Error {
 	session, err := store.Get(r, sessionName)
 	if err != nil {
 		// TODO ignoring session errors
@@ -168,7 +167,7 @@ func (goog *googleService) HandleDisconnect(w http.ResponseWriter, r *http.Reque
 	return nil
 }
 
-func (goog *googleService) HandleOAuthCallback(w http.ResponseWriter, r *http.Request) *app.Error {
+func (goog *googleProvider) HandleOAuthCallback(w http.ResponseWriter, r *http.Request) *app.Error {
 	logOut.Println("Validating the state")
 
 	session, err := store.Get(r, sessionName)
@@ -359,16 +358,10 @@ func encodeBooksAsCSV(books []*libris.Book, w io.Writer) error {
 func main() {
 	r := mux.NewRouter().StrictSlash(true) // XXX so that /google and /google/ match
 
-	if gRout, ok := goog.(app.Router); ok {
-		stack := logging
-
-		r.Handle(gRout.Books(), stack(app.Handler(goog.HandleBooks)))
-		r.Handle(gRout.Connect(), stack(app.Handler(goog.HandleConnect)))
-		r.Handle(gRout.Disconnect(), stack(app.Handler(goog.HandleDisconnect)))
-		r.Handle(gRout.OAuthCallback(), stack(app.Handler(goog.HandleOAuthCallback)))
-	} else {
-		logErr.Fatalln("No Google endpoints handled!")
-	}
+	r.Handle(goog.Books(), statusLogging(app.Handler(goog.HandleBooks))).Methods("GET")
+	r.Handle(goog.Connect(), statusLogging(app.Handler(goog.HandleConnect))).Methods("GET")
+	r.Handle(goog.Disconnect(), statusLogging(app.Handler(goog.HandleDisconnect))).Methods("GET")
+	r.Handle(goog.OAuthCallback(), statusLogging(app.Handler(goog.HandleOAuthCallback))).Methods("GET")
 
 	logOut.Printf("Starting server on port %s\n", port)
 	http.ListenAndServe(":"+port, r)
@@ -416,14 +409,27 @@ func (s *statusResponseLogger) Flush() {
 	}
 }
 
-func logging(h http.Handler) http.Handler {
+func statusLogging(h http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		lw := &statusResponseLogger{w: w, status: http.StatusOK}
 
 		h.ServeHTTP(lw, r)
 
-		if lw.Status() >= 400 {
-			logErr.Printf("Error %d: %s\n", lw.Status(), http.StatusText(lw.Status()))
+		switch {
+		case lw.Status() < 100:
+			logErr.Printf("Response: Unknown code %d. Something very strange is a-brewing...\n", lw.Status())
+		case lw.Status() < 200:
+			logOut.Printf("Response: [Informational] %d: %s\n", lw.Status(), http.StatusText(lw.Status()))
+		case lw.Status() < 300:
+			logOut.Printf("Response: [Success] %d: %s\n", lw.Status(), http.StatusText(lw.Status()))
+		case lw.Status() < 400:
+			logOut.Printf("Response: [Redirection] %d: %s\n", lw.Status(), http.StatusText(lw.Status()))
+		case lw.Status() < 500:
+			logErr.Printf("Response: [Client Error] %d: %s\n", lw.Status(), http.StatusText(lw.Status()))
+		case lw.Status() < 600:
+			logErr.Printf("Response: [Server Error] %d: %s\n", lw.Status(), http.StatusText(lw.Status()))
+		default:
+			logErr.Printf("Response: Unknown code %d. Something very strange is a-brewing...\n", lw.Status())
 		}
 	})
 }
@@ -466,7 +472,7 @@ func randomString() string {
 	return fmt.Sprintf("st%d", time.Now().UnixNano())
 }
 
-func defaultValue(v string, def string) string {
+func defaultTo(v string, def string) string {
 	if v == "" {
 		return def
 	}
