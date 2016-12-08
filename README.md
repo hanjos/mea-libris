@@ -9,12 +9,12 @@ This command needs OAuth credentials to access your book data, which can be crea
 
 In particular, you'll need to register an authorized redirect URL, which will receive Google's auth responses. This program offers the `/google/oauth2callback` endpoint for that, so use the full URL: `http://<my-running-server>/google/oauth2callback`.
  
-Your instance's Google OAuth credentials are read via two environment variables, `CLIENT_ID` and `CLIENT_SECRET`.
+Your instance's Google OAuth credentials are read via two environment variables, `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET`.
 
 Optionally, this command also reads two more environment variables:
 
 * `PORT`: the port the server will be bound to. Defaults to 8080.
-* `REDIRECT_URL`: forces a specific redirect URL. More on this below.
+* `GOOGLE_REDIRECT_URL`: forces a specific redirect URL. More on this below.
 
 ### OK, it's running. Now what?
 
@@ -40,7 +40,7 @@ Yeah... `mea-libris` can build the redirect URL itself, but:
 * Google demands the URL to be an exact match (scheme, host, port and path) with what's registered in the API Console; and 
 * I don't know a sure-fire way to get all the information needed (*e.g.* the scheme isn't always there, so `mea-libris` defaults to `http`). 
 
-So, as an escape hatch, `mea-libris` will use the contents of the `REDIRECT_URL` environment variable, if available.
+So, as an escape hatch, `mea-libris` will use the contents of the `GOOGLE_REDIRECT_URL` environment variable, if available.
 
 ## How do I build this?
 
@@ -49,7 +49,7 @@ mea-libris uses [Go](https://golang.org/) (version 1.6+) and [Glide](http://glid
 After the setup, compile and run:
 
 ```
-$ glide install -v
+$ glide update -v
 $ go install 
 $ $GOPATH/bin/mea-libris
 ```
