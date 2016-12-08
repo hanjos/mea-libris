@@ -1,5 +1,5 @@
-hash: 28a075e01a2722770fce05f6bb48f7063c37a569ee950be692bb49fbdb54e6f2
-updated: 2016-11-24T17:43:53.2229473-02:00
+hash: 209149eddf1085e7ed3e67d888452e54d6581b9418359a8f19df54ebab8b01ff
+updated: 2016-12-08T14:01:37.8559421-02:00
 imports:
 - name: cloud.google.com/go
   version: 5af4269f950e91e917bab77f1138139023c868c2
@@ -28,6 +28,8 @@ imports:
   - ptypes/wrappers
 - name: github.com/gorilla/context
   version: 08b5f424b9271eedf6f9f0ce86cb9396ed337a42
+- name: github.com/gorilla/mux
+  version: 757bef944d0f21880861c2dd9c871ca543023cba
 - name: github.com/gorilla/securecookie
   version: fa5329f913702981df43dcb2a380bac429c810b5
 - name: github.com/gorilla/sessions
