@@ -126,7 +126,7 @@ func (goog *googleProvider) HandleConnect(w http.ResponseWriter, r *http.Request
 	session.Save(r, w)
 
 	redirectURL := defaultTo(googleRedirectURL, app.BuildRedirectURL(r, goog))
-	logOut.Printf("Setting the redirect URL to %s", redirectURL)
+	logOut.Printf("Setting the redirect URL to %s\n", redirectURL)
 	config := goog.Config()
 	config.RedirectURL = redirectURL
 
@@ -177,6 +177,12 @@ func (goog *googleProvider) HandleOAuthCallback(w http.ResponseWriter, r *http.R
 	}
 
 	sessionState, ok := session.Values["state"].(string)
+
+	// XXX state is a one-time value; we won't need it after this function
+	defer func() {
+		session.Values["state"] = nil
+	}()
+
 	if !ok || r.FormValue("state") != sessionState {
 		return app.Wrap(errInvalidState(sessionState, r.FormValue("state")), http.StatusBadRequest)
 	}
@@ -189,12 +195,8 @@ func (goog *googleProvider) HandleOAuthCallback(w http.ResponseWriter, r *http.R
 	logOut.Println("Reading the code")
 	code := r.FormValue("code")
 	if code == "" {
-		return app.Wrap(errCodeNotFound, http.StatusBadGateway)
+		return app.Wrap(errCodeNotFound, http.StatusBadRequest)
 	}
-
-	defer func() {
-		session.Values["state"] = nil // XXX state is a one-time value; we don't need it anymore
-	}()
 
 	logOut.Println("Exchanging the code for an access token")
 	config := goog.Config()

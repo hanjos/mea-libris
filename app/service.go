@@ -20,7 +20,7 @@ type Service interface {
 	HandleOAuthCallback(w http.ResponseWriter, r *http.Request) *Error
 }
 
-// Router is an interface used to determine endpoints for app.Services.
+// Router is an interface used to determine endpoints for Services.
 type Router interface {
 	Route(path string) string
 
@@ -48,7 +48,7 @@ func (c *defaultClient) Config() *oauth2.Config {
 
 type defaultService struct{}
 
-// NewService creates a Service.
+// NewService creates a default Service, with empty implementations.
 func NewService() Service {
 	return &defaultService{}
 }
@@ -94,24 +94,24 @@ func (r *defaultRouter) Books() string {
 	return r.Route("")
 }
 
-// Connect implements the Router interface, returning the default path prefix prepending "/connect".
+// Connect implements the Router interface, returning "<default path prefix>/connect".
 func (r *defaultRouter) Connect() string {
 	return r.Route("/connect")
 }
 
-// Disconnect implements the Router interface, returning the default path prefix prepending "/disconnect".
+// Disconnect implements the Router interface, returning "<default path prefix>/disconnect".
 func (r *defaultRouter) Disconnect() string {
 	return r.Route("/disconnect")
 }
 
-// OAuthCallback implements the Router interface, returning the default path prefix prepending "/oauth2connect".
+// OAuthCallback implements the Router interface, returning "<default path prefix>/oauth2connect".
 func (r *defaultRouter) OAuthCallback() string {
 	return r.Route("/oauth2callback")
 }
 
-// BuildRedirectURL builds a prospective redirect URL, given a request and a router.
+// BuildRedirectURL builds a prospective redirect URL, given a request and a Router.
 func BuildRedirectURL(r *http.Request, router Router) string {
-	scheme := r.URL.Scheme // this may be empty, use 'http' by default
+	scheme := r.URL.Scheme // use 'http' if this is empty
 	if scheme == "" {
 		scheme = "http"
 	}

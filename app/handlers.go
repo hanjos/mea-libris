@@ -5,7 +5,7 @@ import (
 	"net/http"
 )
 
-// Handler runs the given function and sends the data in *Error, if any, to http.Error.
+// Handler is an http.Handler which runs the given function and sends the data in *Error, if any, to http.Error.
 type Handler func(w http.ResponseWriter, r *http.Request) *Error
 
 // ServeHTTP implements the http.Handler interface.
