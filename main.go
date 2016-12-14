@@ -45,8 +45,6 @@ var (
 	googleRedirectURL  = os.Getenv("GOOGLE_REDIRECT_URL")
 	port               = defaultTo(os.Getenv("PORT"), "8080")
 
-	goog = newGoogleProvider(googleClientID, googleClientSecret)
-
 	store = sessions.NewCookieStore([]byte(randomString()))
 
 	// No date or time; an external router can consume this log and provide that
@@ -358,6 +356,8 @@ func encodeBooksAsCSV(books []*libris.Book, w io.Writer) error {
 
 // MAIN
 func main() {
+	goog := newGoogleProvider(googleClientID, googleClientSecret)
+
 	r := mux.NewRouter().StrictSlash(true) // XXX so that /google and /google/ match
 
 	r.Handle(goog.Books(), statusLogging(app.Handler(goog.HandleBooks))).Methods("GET")
