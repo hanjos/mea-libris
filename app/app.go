@@ -150,9 +150,9 @@ func (r *defaultRouter) Route(path string) string {
 	return r.pathPrefix + path
 }
 
-// Books implements the app.Router interface, returning the default path prefix.
+// Books implements the app.Router interface, returning "<default path prefix>/".
 func (r *defaultRouter) Books() string {
-	return r.Route("")
+	return r.Route("/")
 }
 
 // Connect implements the app.Router interface, returning "<default path prefix>/connect".
@@ -168,15 +168,4 @@ func (r *defaultRouter) Disconnect() string {
 // OAuthCallback implements the app.Router interface, returning "<default path prefix>/oauth2connect".
 func (r *defaultRouter) OAuthCallback() string {
 	return r.Route("/oauth2callback")
-}
-
-// BuildRedirectURL builds a prospective redirect URL, given a request and an app.Router. The validity of this URL
-// depends on how the server is deployed, but this function presents a best-effort attempt to automatically detect it.
-func BuildRedirectURL(r *http.Request, router Router) string {
-	scheme := r.URL.Scheme // use 'http' if this is empty
-	if scheme == "" {
-		scheme = "http"
-	}
-
-	return scheme + "://" + r.Host + router.OAuthCallback()
 }

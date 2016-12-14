@@ -5,7 +5,6 @@ import:
   subpackages:
   - httputil
 - package: github.com/gorilla/sessions
-- package: github.com/gorilla/mux
 - package: golang.org/x/oauth2
   subpackages:
   - google

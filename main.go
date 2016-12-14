@@ -26,8 +26,8 @@ import (
 	"strings"
 	"time"
 
+	"encoding/json"
 	"github.com/golang/gddo/httputil"
-	"github.com/gorilla/mux"
 	"github.com/gorilla/sessions"
 	"github.com/hanjos/mea-libris/app"
 	"github.com/hanjos/mea-libris/libris"
@@ -123,7 +123,7 @@ func (goog *googleProvider) HandleConnect(w http.ResponseWriter, r *http.Request
 	session.Values["state"] = state
 	session.Save(r, w)
 
-	redirectURL := defaultTo(googleRedirectURL, app.BuildRedirectURL(r, goog))
+	redirectURL := defaultTo(googleRedirectURL, buildRedirectURL(r, goog))
 	logOut.Printf("Setting the redirect URL to %s\n", redirectURL)
 	config := goog.Config()
 	config.RedirectURL = redirectURL
@@ -213,6 +213,18 @@ func (goog *googleProvider) HandleOAuthCallback(w http.ResponseWriter, r *http.R
 }
 
 // STEP FUNCTIONS
+
+// buildRedirectURL builds a prospective redirect URL, given a request and an app.Router. The validity of this URL
+// depends on how the server is deployed, but this function presents a best-effort attempt to automatically detect it.
+func buildRedirectURL(r *http.Request, router app.Router) string {
+	scheme := r.URL.Scheme // use 'http' if this is empty
+	if scheme == "" {
+		scheme = "http"
+	}
+
+	return scheme + "://" + r.Host + router.OAuthCallback()
+}
+
 func newGoogleBooksClient(config *oauth2.Config, ctx context.Context, token string) (*books.Service, error) {
 	logOut.Println("Using the access token to build a Google Books client")
 
@@ -358,15 +370,37 @@ func encodeBooksAsCSV(books []*libris.Book, w io.Writer) error {
 func main() {
 	goog := newGoogleProvider(googleClientID, googleClientSecret)
 
-	r := mux.NewRouter().StrictSlash(true) // XXX so that /google and /google/ match
+	mux := http.NewServeMux()
 
-	r.Handle(goog.Books(), statusLogging(app.Handler(goog.HandleBooks))).Methods("GET")
-	r.Handle(goog.Connect(), statusLogging(app.Handler(goog.HandleConnect))).Methods("GET")
-	r.Handle(goog.Disconnect(), statusLogging(app.Handler(goog.HandleDisconnect))).Methods("GET")
-	r.Handle(goog.OAuthCallback(), statusLogging(app.Handler(goog.HandleOAuthCallback))).Methods("GET")
+	mux.Handle("/", statusLogging(showEndpoints(goog)))
+	mux.Handle(goog.Books(), statusLogging(app.Handler(goog.HandleBooks)))
+	mux.Handle(goog.Connect(), statusLogging(app.Handler(goog.HandleConnect)))
+	mux.Handle(goog.Disconnect(), statusLogging(app.Handler(goog.HandleDisconnect)))
+	mux.Handle(goog.OAuthCallback(), statusLogging(app.Handler(goog.HandleOAuthCallback)))
 
 	logOut.Printf("Starting server on port %s\n", port)
-	http.ListenAndServe(":"+port, r)
+	http.ListenAndServe(":"+port, mux)
+}
+
+func showEndpoints(routers ...app.Router) app.Handler {
+	var endpoints []string
+	for _, r := range routers {
+		endpoints = append(endpoints, r.Books(), r.Connect(), r.Disconnect(), r.OAuthCallback())
+	}
+
+	return app.Handler(func(w http.ResponseWriter, r *http.Request) *app.Error {
+		endpointsJSON, err := json.Marshal(endpoints)
+		if err != nil {
+			return app.Wrap(err, http.StatusInternalServerError)
+		}
+
+		_, err = fmt.Fprintf(w, "%s", endpointsJSON)
+		if err != nil {
+			return app.Wrap(err, http.StatusInternalServerError)
+		}
+
+		return nil
+	})
 }
 
 // HANDLERS & MIDDLEWARES
